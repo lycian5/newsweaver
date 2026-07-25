@@ -1,8 +1,8 @@
 'use strict';
 
-const { getSupabase } = require('../lib/supabase');
-const { assertCronAuth } = require('../lib/cronAuth');
-const { normalizeSchedule, scheduleFromRow } = require('../lib/collectionSchedule');
+const { getSupabase } = require('../../lib/supabase');
+const { assertCronAuth } = require('../../lib/cronAuth');
+const { normalizeSchedule, scheduleFromRow } = require('../../lib/collectionSchedule');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');

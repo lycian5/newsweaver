@@ -9,7 +9,7 @@ const {
   createDashboardSessionCookie,
   verifyDashboardPassword,
   verifyDashboardSession,
-} = require('../api/lib/cronAuth');
+} = require('../lib/cronAuth');
 
 assert.equal(verifyDashboardPassword('dashboard-password-1234'), true);
 assert.equal(verifyDashboardPassword('wrong-password'), false);

@@ -1,8 +1,8 @@
-const { getSupabase } = require('../lib/supabase');
-const { assertCronAuth } = require('../lib/cronAuth');
-const { searchNews } = require('../lib/naver');
-const { searchGoogleNews } = require('../lib/googleNews');
-const { fetchPolicyNotices } = require('../lib/policySources');
+const { getSupabase } = require('../../lib/supabase');
+const { assertCronAuth } = require('../../lib/cronAuth');
+const { searchNews } = require('../../lib/naver');
+const { searchGoogleNews } = require('../../lib/googleNews');
+const { fetchPolicyNotices } = require('../../lib/policySources');
 const { selectHybridKeywords } = require('../../scripts/keyword-selection');
 
 function stripHtml(str) {

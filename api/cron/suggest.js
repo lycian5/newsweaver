@@ -1,9 +1,9 @@
-const { getSupabase } = require('../lib/supabase');
-const { assertCronAuth } = require('../lib/cronAuth');
-const { getOpenAI } = require('../lib/openai');
-const { resolveOpenAIModel } = require('../lib/openaiModels');
-const { getDatalabTrend } = require('../lib/naver');
-const { postBriefing } = require('../lib/slack');
+const { getSupabase } = require('../../lib/supabase');
+const { assertCronAuth } = require('../../lib/cronAuth');
+const { getOpenAI } = require('../../lib/openai');
+const { resolveOpenAIModel } = require('../../lib/openaiModels');
+const { getDatalabTrend } = require('../../lib/naver');
+const { postBriefing } = require('../../lib/slack');
 
 const CATEGORY_LABEL = {
   ai_business: 'AI 비즈니스',

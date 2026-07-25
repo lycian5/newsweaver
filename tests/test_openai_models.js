@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { resolveOpenAIModel } = require('../api/lib/openaiModels');
+const { resolveOpenAIModel } = require('../lib/openaiModels');
 
 assert.equal(resolveOpenAIModel('suggest'), 'gpt-5-mini');
 assert.equal(resolveOpenAIModel('suggest', 'gpt-5.4-mini'), 'gpt-5.4-mini');

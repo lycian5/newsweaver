@@ -1,13 +1,13 @@
-const { getSupabase } = require('../lib/supabase');
+const { getSupabase } = require('../../lib/supabase');
 const {
   assertCronAuth,
   clearDashboardSessionCookie,
   createDashboardSessionCookie,
   verifyDashboardPassword,
   verifyDashboardSession,
-} = require('../lib/cronAuth');
-const { getOpenAI } = require('../lib/openai');
-const { resolveOpenAIModel } = require('../lib/openaiModels');
+} = require('../../lib/cronAuth');
+const { getOpenAI } = require('../../lib/openai');
+const { resolveOpenAIModel } = require('../../lib/openaiModels');
 const { selectHybridKeywords } = require('../../scripts/keyword-selection');
 
 const DRAFT_SCHEMA = {

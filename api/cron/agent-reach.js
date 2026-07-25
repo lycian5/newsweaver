@@ -1,4 +1,4 @@
-const { assertCronAuth } = require('../lib/cronAuth');
+const { assertCronAuth } = require('../../lib/cronAuth');
 
 module.exports = async (req, res) => {
   if (!['GET', 'POST'].includes(req.method)) {

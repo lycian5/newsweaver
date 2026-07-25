@@ -4,7 +4,7 @@ const {
   normalizeDailyTime,
   normalizeSchedule,
   scheduleFromRow,
-} = require('../api/lib/collectionSchedule');
+} = require('../lib/collectionSchedule');
 
 assert.equal(normalizeDailyTime('06:30'), '06:30');
 assert.equal(normalizeDailyTime('23:59:00'), '23:59');
