@@ -1,13 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aimax-004-v1-codex.vercel.app/coanews-draft.schema.json",
-  "title": "COA NEWS article pending editor approval",
+  "title": "COA NEWS article approved for manual registration",
   "type": "object",
   "required": [
     "schema_version",
     "external_id",
     "status",
     "publish_allowed",
+    "internal_draft_id",
     "category",
     "title",
     "subtitles",
@@ -18,10 +19,11 @@
     "generated_at"
   ],
   "properties": {
-    "schema_version": { "const": "coanews-draft/1.0" },
+    "schema_version": { "const": "coanews-draft/2.0" },
     "external_id": { "type": "string", "pattern": "^coa-[0-9]{8}-[a-z0-9]+$" },
-    "status": { "const": "pending_editor_approval" },
+    "status": { "const": "approved_for_registration" },
     "publish_allowed": { "const": false },
+    "internal_draft_id": { "type": ["integer", "null"] },
     "category": { "$ref": "#/$defs/category" },
     "additional_categories": {
       "type": "array",

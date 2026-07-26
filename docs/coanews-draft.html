@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>COA NEWS 기사 초안 준비</title>
-  <meta name="description" content="코아뉴스 뉴스등록 후 편집장 승인대기로 저장할 기사 자료를 준비합니다." />
+  <meta name="description" content="검증된 리서치 브리프로 기사 초안을 작성하고 등록용 승인을 관리합니다." />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
     :root {
@@ -24,6 +24,7 @@
     body { margin:0; background:var(--bg); color:var(--ink); font-family:Pretendard,"Noto Sans KR",Arial,sans-serif; font-size:14px; }
     button,input,select,textarea { font:inherit; }
     button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.45; }
     .topbar { position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid var(--line); }
     .topbar-inner { max-width:1280px; margin:0 auto; min-height:64px; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
     .brand h1 { margin:0; font-size:19px; }
@@ -48,6 +49,7 @@
     .field input,.field select { min-height:39px; }
     .field textarea { resize:vertical; min-height:76px; line-height:1.55; }
     .field input:focus,.field select:focus,.field textarea:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(8,126,164,.12); }
+    .field input:disabled,.field select:disabled,.field textarea:disabled { background:#f8fafc; color:#64748b; }
     .field .hint { color:var(--muted); font-size:11px; line-height:1.45; }
     .body-editor { min-height:410px !important; font-family:"Noto Sans KR",Arial,sans-serif; }
     .source-strip { padding:10px 12px; border:1px solid #bae6fd; background:#f0f9ff; border-radius:5px; font-size:12px; color:#0c4a6e; margin-bottom:14px; overflow-wrap:anywhere; }
@@ -66,9 +68,10 @@
     .actions { display:flex; flex-wrap:wrap; gap:8px; }
     .btn { min-height:38px; border:1px solid transparent; border-radius:5px; padding:8px 13px; font-weight:700; font-size:12px; background:#fff; }
     .btn-primary { background:var(--accent); color:#fff; }
-    .btn-primary:hover { background:var(--accent-dark); }
+    .btn-primary:hover:not(:disabled) { background:var(--accent-dark); }
+    .btn-good { background:var(--good); color:#fff; }
     .btn-outline { border-color:#cbd5e1; color:#334155; }
-    .btn-outline:hover { border-color:var(--accent); color:var(--accent); }
+    .btn-outline:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
     .btn-danger { border-color:#fecaca; color:var(--danger); }
     .side { position:sticky; top:82px; }
     .side-section { padding:16px; border-bottom:1px solid var(--line); }
@@ -102,9 +105,9 @@
     <div class="topbar-inner">
       <div class="brand">
         <h1>COA NEWS 기사 초안 준비</h1>
-        <p>관리자 기사등록 화면으로 옮겨 뉴스등록할 기사 자료를 만듭니다.</p>
+        <p>검증된 리서치 브리프를 실제 기사로 작성하고 등록용 최종본을 확정합니다.</p>
       </div>
-      <span class="status">뉴스등록 후 편집장 승인대기</span>
+      <span class="status" id="workflowStatus">작성 중</span>
     </div>
   </header>
 
@@ -224,7 +227,11 @@
           <div class="toggle"><label for="shareNews">공유뉴스</label><input id="shareNews" type="checkbox" /></div>
           <div class="toggle"><label for="shareConsent">공유약관 동의</label><input id="shareConsent" type="checkbox" /></div>
         </div>
-        <div class="fixed-state" style="margin-top:12px;">등록 목표 상태: pending_editor_approval · 뉴스등록 완료 · 편집장 승인대기</div>
+        <div class="field" style="margin-top:12px;">
+          <label for="editorialNotes">편집 메모·반려 사유</label>
+          <textarea id="editorialNotes" placeholder="검토 메모를 입력하세요. 반려할 때는 사유 입력이 필수입니다."></textarea>
+        </div>
+        <div class="fixed-state" id="workflowBanner" style="margin-top:12px;">현재 상태: 작성 중 · 내용을 저장한 뒤 검토대기로 제출하세요.</div>
       </section>
     </form>
 
@@ -241,6 +248,15 @@
         </ul>
       </section>
       <section class="side-section">
+        <h2>기사 검토</h2>
+        <div class="actions">
+          <button class="btn btn-outline" type="button" id="saveDraftButton">초안 저장</button>
+          <button class="btn btn-primary" type="button" id="submitDraftButton">검토 요청</button>
+          <button class="btn btn-good" type="button" id="approveDraftButton" disabled>등록용 승인</button>
+          <button class="btn btn-danger" type="button" id="rejectDraftButton" disabled>반려</button>
+        </div>
+      </section>
+      <section class="side-section">
         <h2>빠른 복사</h2>
         <div class="copy-row">
           <button class="btn btn-outline" type="button" id="copyTitleButton">제목 복사</button>
@@ -252,15 +268,15 @@
       <section class="side-section">
         <h2>수동등록 패키지</h2>
         <div class="actions">
-          <button class="btn btn-primary" type="button" id="downloadZipButton">ZIP 패키지</button>
-          <button class="btn btn-outline" type="button" id="downloadJsonButton">JSON</button>
-          <button class="btn btn-outline" type="button" id="downloadHtmlButton">본문 HTML</button>
+          <button class="btn btn-primary" type="button" id="downloadZipButton" disabled>ZIP 패키지</button>
+          <button class="btn btn-outline" type="button" id="downloadJsonButton" disabled>JSON</button>
+          <button class="btn btn-outline" type="button" id="downloadHtmlButton" disabled>본문 HTML</button>
           <button class="btn btn-outline" type="button" id="downloadImageButton">대표 이미지</button>
         </div>
       </section>
       <section class="side-section">
         <div class="notice">
-          이 화면은 코아뉴스 관리자 페이지에 자동 로그인하거나 기사를 발행하지 않습니다. 내려받은 자료를 검토한 뒤 관리자 기사등록 화면에 수동으로 입력하세요.
+          등록용 승인 후에만 패키지를 만들 수 있습니다. 이 화면은 코아뉴스 관리자 페이지에 자동 로그인하거나 기사를 발행하지 않습니다.
         </div>
         <button class="btn btn-danger" type="button" id="resetButton" style="width:100%;margin-top:10px;">작성 내용 초기화</button>
       </section>
@@ -269,6 +285,7 @@
 
   <div class="toast" id="toast" role="status"></div>
 
+  <script src="/auth-session.js"></script>
   <script>
     const CATEGORIES = [
       { id:'11', name:'통합뉴스' },
@@ -282,17 +299,20 @@
       { id:'18', name:'마케팅 / 유통' },
       { id:'25', name:'커뮤니티' },
     ];
-    const CATEGORY_DEFAULTS = { ai:'13', startup:'15', policy:'17', column:'14/26' };
+    const CATEGORY_DEFAULTS = { ai:'13', ai_business:'13', startup:'15', policy:'17', column:'14/26' };
     const FORM_KEY = 'coa_news_draft_form_v1';
     const SEED_KEY = 'coa_news_draft_seed';
+    const WORKFLOW_KEY = 'coa_news_article_workflow_v1';
     const fieldIds = [
       'category','additionalCategory1','additionalCategory2','reporterEmail','scheduledAt','title',
       'subtitle1','subtitle2','subtitle3','bodyHtml','thumbnailAlt','thumbnailCaption','thumbnailSource',
       'tags','sourceUrl','commentsEnabled','showOnMain','showAsHeadline','articleAd','shareNews','shareConsent',
-      'imageMode','imageBackground'
+      'imageMode','imageBackground','editorialNotes'
     ];
     let sourceImage = null;
     let toastTimer = null;
+    let currentDraftId = null;
+    let currentDraftStatus = 'draft';
 
     function $(id) { return document.getElementById(id); }
 
@@ -327,14 +347,15 @@
         category:'11', additionalCategory1:'', additionalCategory2:'', reporterEmail:'', scheduledAt:'',
         title:'', subtitle1:'', subtitle2:'', subtitle3:'', bodyHtml:'', thumbnailAlt:'', thumbnailCaption:'',
         thumbnailSource:'', tags:'', sourceUrl:'', commentsEnabled:false, showOnMain:false, showAsHeadline:false,
-        articleAd:false, shareNews:false, shareConsent:false, imageMode:'cover', imageBackground:'#ffffff'
+        articleAd:false, shareNews:false, shareConsent:false, imageMode:'cover', imageBackground:'#ffffff',
+        editorialNotes:''
       };
     }
 
     function applySeed(seed) {
       const defaults = defaultFields();
       defaults.category = CATEGORY_DEFAULTS[seed.category] || '11';
-      defaults.additionalCategory1 = seed.category === 'ai' ? '16' : '';
+      defaults.additionalCategory1 = ['ai', 'ai_business'].includes(seed.category) ? '16' : '';
       defaults.title = seed.title || '';
       defaults.sourceUrl = seed.source_url || '';
       defaults.bodyHtml = seed.summary
@@ -342,12 +363,16 @@
         : '';
       defaults.tags = categoryTags(seed.category);
       applyFields(defaults);
+      currentDraftId = Number(seed.draft_id) || null;
+      currentDraftStatus = 'draft';
+      localStorage.setItem(WORKFLOW_KEY, JSON.stringify({ draftId:currentDraftId, status:currentDraftStatus }));
       $('seedInfo').hidden = false;
-      $('seedInfo').innerHTML = `<strong>선택한 수집 소재</strong>${escapeHtml(seed.source_name || '')} · ${escapeHtml(seed.source_url || '')}<br>수집 요약을 초안 시작점으로 가져왔습니다. 완성 본문으로 반드시 다시 작성하고 검증하세요.`;
+      const warningCount = seed.validation?.warnings?.length || 0;
+      $('seedInfo').innerHTML = `<strong>검증된 리서치 브리프</strong>${escapeHtml(seed.source_name || '')} · ${escapeHtml(seed.source_url || '')}<br>필수 검증을 통과했습니다.${warningCount ? ` 검토 경고 ${warningCount}건은 원문에서 다시 확인하세요.` : ''} 완성 기사 본문으로 다시 작성해야 합니다.`;
     }
 
     function categoryTags(category) {
-      return { ai:'AI, AI비즈니스', startup:'창업, 부업', policy:'소상공인, 정책지원', column:'칼럼, 인사이트' }[category] || '';
+      return { ai:'AI, AI비즈니스', ai_business:'AI, AI비즈니스', startup:'창업, 부업', policy:'소상공인, 정책지원', column:'칼럼, 인사이트' }[category] || '';
     }
 
     function getCategory(id) {
@@ -414,10 +439,11 @@
         .filter((id, index, values) => id !== data.category && values.indexOf(id) === index)
         .map(id => getCategory(id));
       return {
-        schema_version:'coanews-draft/1.0',
+        schema_version:'coanews-draft/2.0',
         external_id:createExternalId(),
-        status:'pending_editor_approval',
+        status:'approved_for_registration',
         publish_allowed:false,
+        internal_draft_id:currentDraftId,
         category,
         additional_categories:extras,
         scheduled_at:data.scheduledAt || null,
@@ -567,6 +593,10 @@
     }
 
     function ensureExportable() {
+      if (currentDraftStatus !== 'approved') {
+        showToast('편집장의 등록용 승인 후 패키지를 생성할 수 있습니다.', true);
+        return false;
+      }
       const issues = validateDraft(true);
       if (issues.length) { showToast(issues[0], true); return false; }
       return true;
@@ -617,17 +647,17 @@
         'COA NEWS 수동등록 패키지',
         '',
         `외부 ID: ${payload.external_id}`,
-        `상태: ${payload.status} (편집장 승인대기)`,
+        `상태: ${payload.status} (등록용 승인 완료)`,
         `카테고리: ${payload.category?.name || ''}`,
         '',
         '1. article.json의 제목, 부제목, 카테고리, 태그를 확인합니다.',
         '2. body.html을 코아뉴스 기사 편집기에 붙여 넣고 미리보기로 확인합니다.',
         '3. thumbnail.jpg가 있으면 대표 이미지로 등록하고 출처를 확인합니다.',
         '4. 메인·헤드라인·공유뉴스·기사형 광고는 필요한 경우에만 수동으로 켭니다.',
-        '5. 기자가 팩트체크와 저작권을 확인한 뒤 관리자 화면에서 뉴스등록합니다.',
-        '6. 뉴스등록된 기사는 편집장 승인대기로 저장되며, 편집장이 승인 여부를 판단합니다.',
+        '5. 내부 등록용 승인이 완료된 최종본인지 확인합니다.',
+        '6. 기자가 팩트체크와 저작권을 확인한 뒤 관리자 화면에서 뉴스등록합니다.',
         '',
-        '이 패키지는 편집장 승인이나 자동 공개 발행 권한을 포함하지 않습니다.',
+        '이 패키지는 자동 공개 발행 권한을 포함하지 않습니다.',
       ].join('\r\n');
     }
 
@@ -636,6 +666,140 @@
       const link = document.createElement('a');
       link.href = url; link.download = name; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    async function api(method, body, query = '') {
+      const response = await CoaAuth.request(`/api/editorial/drafts${query}`, {
+        method,
+        headers:{'Content-Type':'application/json'},
+        body:body ? JSON.stringify(body) : undefined,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      return data;
+    }
+
+    async function loadServerDraft(id) {
+      if (!id) return null;
+      const drafts = (await api('GET', null, `?id=${encodeURIComponent(id)}`)).drafts || [];
+      const draft = drafts[0];
+      if (!draft) throw new Error('저장된 기사 초안을 찾을 수 없습니다.');
+      currentDraftId = draft.id;
+      currentDraftStatus = draft.status;
+      $('title').value = draft.title || '';
+      $('subtitle1').value = draft.subtitle || '';
+      $('bodyHtml').value = draft.body_html || '';
+      $('tags').value = (draft.tags || []).join(', ');
+      $('editorialNotes').value = draft.editorial_notes || '';
+      localStorage.setItem(WORKFLOW_KEY, JSON.stringify({draftId:currentDraftId,status:currentDraftStatus}));
+      updateWorkflowUI();
+      saveForm();
+      return draft;
+    }
+
+    function serverPayload(action) {
+      return {
+        id:currentDraftId,
+        action,
+        title:$('title').value.trim(),
+        subtitle:$('subtitle1').value.trim(),
+        bodyHtml:getBodyHtml(),
+        tags:$('tags').value.split(',').map(value => value.trim()).filter(Boolean),
+        editorialNotes:$('editorialNotes').value.trim(),
+      };
+    }
+
+    async function saveServerDraft(silent = false) {
+      if (!currentDraftId) {
+        showToast('리서치 브리프에서 검증 후 기사 초안을 시작하세요.', true);
+        return false;
+      }
+      try {
+        const draft = (await api('PATCH', serverPayload('save'))).draft;
+        currentDraftStatus = draft.status;
+        updateWorkflowUI();
+        if (!silent) showToast('기사 초안을 저장했습니다.');
+        return true;
+      } catch (error) {
+        showToast(error.message, true);
+        return false;
+      }
+    }
+
+    async function submitForReview() {
+      const issues = validateDraft(true);
+      if (issues.length) { showToast(issues[0], true); return; }
+      if (!await saveServerDraft(true)) return;
+      try {
+        const draft = (await api('PATCH', serverPayload('submit'))).draft;
+        currentDraftStatus = draft.status;
+        updateWorkflowUI();
+        showToast('편집장 검토대기로 제출했습니다.');
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    }
+
+    async function decideDraft(action) {
+      if (action === 'reject' && !$('editorialNotes').value.trim()) {
+        showToast('반려 사유를 편집 메모에 입력하세요.', true);
+        $('editorialNotes').focus();
+        return;
+      }
+      const message = action === 'approve'
+        ? '이 기사 초안을 등록용 최종본으로 승인할까요?'
+        : '이 기사 초안을 반려할까요?';
+      if (!confirm(message)) return;
+      try {
+        const draft = (await api('PATCH', serverPayload(action))).draft;
+        currentDraftStatus = draft.status;
+        updateWorkflowUI();
+        showToast(action === 'approve' ? '등록용 최종본으로 승인했습니다.' : '기사 초안을 반려했습니다.');
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    }
+
+    function updateWorkflowUI() {
+      const editable = ['draft','rejected'].includes(currentDraftStatus);
+      const pending = currentDraftStatus === 'pending_editor_approval';
+      const approved = currentDraftStatus === 'approved';
+      fieldIds.forEach(id => {
+        if (id === 'editorialNotes') {
+          $(id).disabled = approved;
+        } else {
+          $(id).disabled = !editable;
+        }
+      });
+      $('thumbnailInput').disabled = !editable;
+      $('saveDraftButton').disabled = !editable || !currentDraftId;
+      $('submitDraftButton').disabled = !editable || !currentDraftId;
+      $('approveDraftButton').disabled = !pending;
+      $('rejectDraftButton').disabled = !pending;
+      $('downloadZipButton').disabled = !approved;
+      $('downloadJsonButton').disabled = !approved;
+      $('downloadHtmlButton').disabled = !approved;
+      $('resetButton').disabled = !editable;
+      $('workflowStatus').textContent = workflowLabel(currentDraftStatus);
+      $('workflowBanner').textContent = `현재 상태: ${workflowLabel(currentDraftStatus)} · ${workflowGuide(currentDraftStatus)}`;
+    }
+
+    function workflowLabel(status) {
+      return {
+        draft:'작성 중',
+        pending_editor_approval:'편집장 검토대기',
+        approved:'등록용 승인',
+        rejected:'반려·수정 중',
+      }[status] || status;
+    }
+
+    function workflowGuide(status) {
+      return {
+        draft:'내용을 저장한 뒤 검토대기로 제출하세요.',
+        pending_editor_approval:'본문은 잠겨 있으며 편집장이 승인 또는 반려할 수 있습니다.',
+        approved:'등록용 패키지를 내려받아 관리자 화면에 수동 등록하세요.',
+        rejected:'반려 사유를 반영한 뒤 다시 검토를 요청하세요.',
+      }[status] || '';
     }
 
     function saveForm() {
@@ -669,7 +833,7 @@
       return String(value || '').replace(/[&<>'"]/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
     }
 
-    function init() {
+    async function init() {
       buildCategoryOptions();
       clearCanvas();
       const seedRaw = localStorage.getItem(SEED_KEY);
@@ -679,6 +843,14 @@
       } else {
         try { applyFields(JSON.parse(localStorage.getItem(FORM_KEY)) || defaultFields()); }
         catch (_) { applyFields(defaultFields()); }
+        try {
+          const workflow = JSON.parse(localStorage.getItem(WORKFLOW_KEY)) || {};
+          currentDraftId = Number(workflow.draftId) || null;
+          currentDraftStatus = workflow.status || 'draft';
+        } catch (_) {
+          currentDraftId = null;
+          currentDraftStatus = 'draft';
+        }
       }
 
       $('draftForm').addEventListener('input', saveForm);
@@ -696,11 +868,21 @@
       $('downloadHtmlButton').onclick = downloadHtml;
       $('downloadImageButton').onclick = downloadImage;
       $('downloadZipButton').onclick = downloadZip;
+      $('saveDraftButton').onclick = () => saveServerDraft();
+      $('submitDraftButton').onclick = submitForReview;
+      $('approveDraftButton').onclick = () => decideDraft('approve');
+      $('rejectDraftButton').onclick = () => decideDraft('reject');
       $('resetButton').onclick = resetForm;
+      const requestedDraft = Number(new URLSearchParams(location.search).get('draft')) || currentDraftId;
+      if (requestedDraft) {
+        try { await loadServerDraft(requestedDraft); }
+        catch (error) { showToast(error.message, true); }
+      }
+      updateWorkflowUI();
       updateChecklist();
     }
 
-    init();
+    CoaAuth.requireSession().then((authenticated) => { if (authenticated) init(); });
   </script>
 </body>
 </html>

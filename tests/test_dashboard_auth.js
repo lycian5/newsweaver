@@ -14,7 +14,7 @@ const {
 assert.equal(verifyDashboardPassword('dashboard-password-1234'), true);
 assert.equal(verifyDashboardPassword('wrong-password'), false);
 
-const now = Date.parse('2026-07-19T00:00:00Z');
+const now = Date.now();
 const setCookie = createDashboardSessionCookie(now);
 assert.match(setCookie, /HttpOnly/);
 assert.match(setCookie, /Secure/);
@@ -27,7 +27,7 @@ assert.doesNotThrow(() => assertCronAuth(request));
 assert.doesNotThrow(() => assertCronAuth({ headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }));
 assert.throws(() => assertCronAuth({ headers: {} }), /Unauthorized/);
 
-for (const page of ['vps-collector.html', 'research-briefs.html', 'editorial-drafts.html']) {
+for (const page of ['vps-collector.html', 'research-briefs.html', 'coanews-draft.html']) {
   const source = fs.readFileSync(require.resolve(`../docs/${page}`), 'utf8');
   assert.match(source, /auth-session\.js/);
   assert.match(source, /CoaAuth\.requireSession/);

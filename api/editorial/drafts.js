@@ -6,22 +6,7 @@ const {
   verifyDashboardPassword,
   verifyDashboardSession,
 } = require('../../lib/cronAuth');
-const { getOpenAI } = require('../../lib/openai');
-const { resolveOpenAIModel } = require('../../lib/openaiModels');
 const { selectHybridKeywords } = require('../../scripts/keyword-selection');
-
-const DRAFT_SCHEMA = {
-  type: 'object',
-  properties: {
-    title: { type: 'string' },
-    subtitle: { type: 'string' },
-    summary: { type: 'string' },
-    body_html: { type: 'string', minLength: 200, maxLength: 1600 },
-    tags: { type: 'array', items: { type: 'string' } },
-  },
-  required: ['title', 'subtitle', 'summary', 'body_html', 'tags'],
-  additionalProperties: false,
-};
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -35,7 +20,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && req.query?.view === 'briefs') return listBriefs(req, res);
     if (req.method === 'GET' && req.query?.view === 'keywords') return listKeywords(req, res);
     if (req.method === 'GET') return listDrafts(req, res);
-    if (req.method === 'POST') return generateDraft(req, res);
+    if (req.method === 'POST' && req.body?.action === 'prepare') return prepareArticleDraft(req, res);
     if (req.method === 'PATCH') return updateDraft(req, res);
     res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
@@ -131,7 +116,7 @@ async function listDrafts(req, res) {
   res.status(200).json({ drafts: data || [] });
 }
 
-async function generateDraft(req, res) {
+async function prepareArticleDraft(req, res) {
   const clusterId = Number.parseInt(req.body?.eventClusterId, 10);
   if (!clusterId) return res.status(400).json({ error: 'eventClusterId is required' });
   const supabase = getSupabase();
@@ -143,33 +128,43 @@ async function generateDraft(req, res) {
   if (clusterError) throw clusterError;
   if (articleError) throw articleError;
   if (factError) throw factError;
-  if (!articles?.length) return res.status(400).json({ error: '근거 기사가 없습니다.' });
+  const validation = validateBriefForPreparation(cluster, articles, facts);
+  if (!validation.ready) return res.status(409).json({ error: validation.blockers[0], validation });
 
-  const model = resolveOpenAIModel('draft', req.body?.model);
-  const response = await getOpenAI().chat.completions.create({
-    model,
-    messages: [
-      { role: 'system', content: '당신은 코아뉴스 소재 편집 보조입니다. 제공된 근거만 사용해 기사 작성 여부를 판단할 수 있는 짧은 한국어 맥락 요약을 작성하세요. 완성 기사를 쓰지 말고, 무슨 일이 있었는지, 왜 지금 다룰 만한지, 핵심 수치·기관·일자, 추가 확인 사항, 권장 기사 각도를 3~5개 문단이나 목록으로 정리하세요. 확인되지 않은 사실, 가상 인용, 임의 수치를 만들지 마세요. body_html은 200~1600자 범위로 작성하고 p, h3, ul, li 태그만 사용합니다. 출처 간 차이가 있으면 단정하지 말고 확인 필요 사항을 명시하세요.' },
-      { role: 'user', content: buildEvidencePrompt(cluster, articles, facts) },
-    ],
-    response_format: { type: 'json_schema', json_schema: { name: 'coanews_editorial_draft', strict: true, schema: DRAFT_SCHEMA } },
-  });
-  const content = response.choices[0]?.message?.content;
-  if (!content) throw new Error('OpenAI 초안 응답이 비어 있습니다.');
-  const draft = JSON.parse(content);
+  const starter = buildArticleStarter(cluster, articles, facts);
   const row = {
     event_cluster_id: clusterId,
-    title: draft.title.slice(0, 500),
-    subtitle: draft.subtitle?.slice(0, 500) || null,
-    summary: draft.summary?.slice(0, 1500) || null,
-    body_html: draft.body_html,
-    tags: (draft.tags || []).slice(0, 20),
+    title: starter.title,
+    subtitle: null,
+    summary: starter.summary,
+    body_html: starter.bodyHtml,
+    tags: starter.tags,
     status: 'draft',
-    model,
+    model: null,
   };
   const { data, error } = await supabase.from('editorial_drafts').insert(row).select().single();
   if (error) throw error;
-  res.status(201).json({ draft: data });
+  res.status(201).json({
+    draft: data,
+    validation,
+    seed: {
+      title: starter.title,
+      summary: starter.summary,
+      source_name: starter.primarySource.source_domain || 'COA NEWS 리서치',
+      source_url: starter.primarySource.url || '',
+      category: cluster.category,
+      event_cluster_id: clusterId,
+      draft_id: data.id,
+      references: articles.map((article) => article.url).filter(Boolean),
+      facts: facts.map((fact) => ({
+        text: fact.fact_text,
+        source_url: fact.source_url,
+        is_official: fact.is_official,
+        confidence: fact.confidence,
+      })),
+      validation,
+    },
+  });
 }
 
 async function updateDraft(req, res) {
@@ -189,11 +184,15 @@ async function updateDraft(req, res) {
     if (Array.isArray(req.body?.tags)) updates.tags = req.body.tags.slice(0, 20);
     updates.status = 'draft';
   } else if (action === 'submit' && ['draft', 'rejected'].includes(current.status)) {
+    const problems = validateArticleDraft(current);
+    if (problems.length) return res.status(400).json({ error: problems[0], problems });
     updates.status = 'pending_editor_approval'; updates.submitted_at = now; updates.decided_at = null;
   } else if (action === 'approve' && current.status === 'pending_editor_approval') {
     updates.status = 'approved'; updates.decided_at = now;
   } else if (action === 'reject' && current.status === 'pending_editor_approval') {
-    updates.status = 'rejected'; updates.decided_at = now; updates.editorial_notes = String(req.body?.editorialNotes || '').slice(0, 3000);
+    const note = String(req.body?.editorialNotes || '').trim();
+    if (!note) return res.status(400).json({ error: '반려 사유를 편집 메모에 입력하세요.' });
+    updates.status = 'rejected'; updates.decided_at = now; updates.editorial_notes = note.slice(0, 3000);
   } else {
     return res.status(409).json({ error: `허용되지 않은 상태 전환입니다: ${current.status} -> ${action}` });
   }
@@ -202,10 +201,93 @@ async function updateDraft(req, res) {
   res.status(200).json({ draft: data });
 }
 
-function buildEvidencePrompt(cluster, articles, facts) {
-  const factText = facts.length ? facts.map((f) => `- [${f.fact_type}] ${f.fact_text} | 공식=${f.is_official} | 신뢰=${f.confidence} | ${f.source_url}`).join('\n') : '- 구조화 사실 없음';
-  const articleText = articles.map((a) => `- ${a.title}\n  출처: ${a.source_domain} (${a.source_type}, 품질 ${a.quality_score})\n  URL: ${a.url}\n  요약: ${a.summary || '없음'}`).join('\n');
-  return `[사건]\n${cluster.representative_title}\n분야: ${cluster.category}\n기준일: ${cluster.event_date || '미상'}\n\n[구조화 사실]\n${factText}\n\n[근거 기사]\n${articleText}`;
+function validateBriefForPreparation(cluster, articles, facts) {
+  const blockers = [];
+  const warnings = [];
+  if (!cluster?.representative_title?.trim()) blockers.push('대표 제목이 없어 기사 초안을 준비할 수 없습니다.');
+  if (!articles?.length) blockers.push('근거 기사가 없어 기사 초안을 준비할 수 없습니다.');
+  if (articles?.length && !articles.some((article) => article.url)) blockers.push('사용 가능한 근거 기사 URL이 없습니다.');
+  const hasVerifiedSource = articles?.some((article) => article.verification_status === 'verified');
+  const hasOfficialSource = Number(cluster?.official_source_count || 0) > 0;
+  if (!hasVerifiedSource && !hasOfficialSource) blockers.push('공식 또는 검증된 출처가 한 건 이상 필요합니다.');
+  if (cluster?.status !== 'ready') warnings.push('리서치 브리프 상태가 작성 가능(ready)이 아닙니다.');
+  if (!facts?.length) warnings.push('구조화된 확인 사실이 없습니다. 원문에서 날짜·기관·수치를 다시 확인하세요.');
+  if (!hasOfficialSource) warnings.push('공식 출처가 없습니다. 인용 범위와 사실관계를 추가 검토하세요.');
+  return {
+    ready: blockers.length === 0,
+    checked_at: new Date().toISOString(),
+    blockers,
+    warnings,
+    checks: {
+      title: Boolean(cluster?.representative_title?.trim()),
+      evidence: Boolean(articles?.length),
+      source_url: Boolean(articles?.some((article) => article.url)),
+      verified_source: Boolean(hasVerifiedSource || hasOfficialSource),
+      structured_facts: Boolean(facts?.length),
+    },
+  };
+}
+
+function buildArticleStarter(cluster, articles, facts) {
+  const primarySource = articles[0] || {};
+  const factItems = facts.length
+    ? facts.map((fact) => `<li>${escapeHtml(fact.fact_text)}</li>`).join('')
+    : '<li>구조화 사실 없음 — 근거 기사 원문에서 핵심 사실을 확인하세요.</li>';
+  const referenceItems = articles
+    .filter((article) => article.url)
+    .map((article) => `<li><a href="${escapeHtml(article.url)}">${escapeHtml(article.title || article.url)}</a></li>`)
+    .join('');
+  const summaryParts = [
+    ...facts.map((fact) => fact.fact_text),
+    primarySource.summary,
+  ].filter(Boolean);
+  return {
+    title: String(cluster.representative_title || '').slice(0, 500),
+    summary: summaryParts.join('\n').slice(0, 1500),
+    bodyHtml: [
+      '<h3>확인된 사실</h3>',
+      `<ul>${factItems}</ul>`,
+      '<h3>기사 작성 메모</h3>',
+      `<p>${escapeHtml(primarySource.summary || '근거 기사 내용을 토대로 완성된 기사 본문을 작성하세요.')}</p>`,
+      '<h3>참고자료</h3>',
+      `<ul>${referenceItems}</ul>`,
+    ].join('\n'),
+    tags: categoryTags(cluster.category),
+    primarySource,
+  };
+}
+
+function validateArticleDraft(draft) {
+  const problems = [];
+  if (!draft?.title?.trim()) problems.push('기사 제목을 입력하세요.');
+  if (htmlTextLength(draft?.body_html) < 200) problems.push('기사 본문을 200자 이상 작성하세요.');
+  return problems;
+}
+
+function htmlTextLength(value) {
+  return String(value || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .length;
+}
+
+function categoryTags(category) {
+  return {
+    ai_business: ['AI', 'AI비즈니스'],
+    startup: ['창업', '부업'],
+    policy: ['소상공인', '정책지원'],
+  }[category] || [];
+}
+
+function escapeHtml(value) {
+  return String(value || '').replace(/[&<>'"]/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+  }[char]));
 }
 
 function clamp(value, min, max, fallback) {
@@ -213,4 +295,6 @@ function clamp(value, min, max, fallback) {
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
 }
 
-module.exports.buildEvidencePrompt = buildEvidencePrompt;
+module.exports.validateBriefForPreparation = validateBriefForPreparation;
+module.exports.buildArticleStarter = buildArticleStarter;
+module.exports.validateArticleDraft = validateArticleDraft;

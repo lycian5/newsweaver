@@ -5,15 +5,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>COA NEWS 리서치 브리프</title>
   <style>
-    :root{font-family:Arial,sans-serif;color:#18212a;background:#eef2f4;--blue:#087ea4;--line:#d7e0e4;--muted:#65747d;--good:#087a43;--warn:#a15c00}*{box-sizing:border-box}
+    :root{font-family:Arial,sans-serif;color:#18212a;background:#eef2f4;--blue:#087ea4;--line:#d7e0e4;--muted:#65747d;--good:#087a43;--warn:#a15c00;--bad:#b42318}*{box-sizing:border-box}
     body{margin:0}.top{background:#087ea4;color:#fff;padding:18px 24px}.top h1{font-size:21px;margin:0}.top p{font-size:13px;margin:5px 0 0}
-    .toolbar{display:flex;gap:10px;align-items:end;max-width:1200px;margin:18px auto;padding:0 16px}.field{flex:1}.field.small{max-width:180px}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}input,select{width:100%;border:1px solid #b9c8cf;border-radius:5px;padding:10px;background:#fff}.btn{border:0;border-radius:5px;padding:11px 16px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff}.btn.secondary{background:#fff;color:#24313a;border:1px solid #b9c8cf}.btn:disabled{opacity:.55}
-    main{max-width:1200px;margin:0 auto 32px;padding:0 16px;display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px}.panel{background:#fff;border:1px solid var(--line);border-radius:8px;min-width:0}.list{max-height:calc(100vh - 170px);overflow:auto}.item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;padding:14px;cursor:pointer}.item:hover,.item.active{background:#eef8fb}.item strong{display:block;line-height:1.4}.meta,.muted{color:var(--muted);font-size:12px}.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.badge{font-size:11px;padding:3px 7px;border-radius:4px;background:#edf2f4}.official{color:var(--good);background:#e8f6ee}.detail{padding:22px;min-height:520px}.detail h2{font-size:22px;line-height:1.4;margin:0 0 8px}.section{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}.section h3{font-size:15px;margin:0 0 10px}.fact,.article{padding:10px 0;border-bottom:1px solid #edf1f2}.fact:last-child,.article:last-child{border-bottom:0}.fact-type{font-size:11px;color:var(--blue);font-weight:700;margin-right:7px}.article a{color:#12688a;text-decoration:none}.article p{font-size:13px;color:#4e5d66;margin:5px 0}.empty{padding:50px 20px;text-align:center;color:var(--muted)}.actions{display:flex;gap:8px;margin-top:18px}
+    .toolbar{display:flex;gap:10px;align-items:end;max-width:1200px;margin:18px auto;padding:0 16px}.field{flex:1}.field.small{max-width:180px}.field label{display:block;font-size:12px;font-weight:700;margin-bottom:5px}input,select{width:100%;border:1px solid #b9c8cf;border-radius:5px;padding:10px;background:#fff}.btn{display:inline-flex;align-items:center;justify-content:center;border:0;border-radius:5px;padding:11px 16px;font-weight:700;cursor:pointer;background:var(--blue);color:#fff;text-decoration:none}.btn.secondary{background:#fff;color:#24313a;border:1px solid #b9c8cf}.btn:disabled{opacity:.55;cursor:not-allowed}
+    main{max-width:1200px;margin:0 auto 32px;padding:0 16px;display:grid;grid-template-columns:360px minmax(0,1fr);gap:16px}.panel{background:#fff;border:1px solid var(--line);border-radius:8px;min-width:0}.list{max-height:calc(100vh - 170px);overflow:auto}.item{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;padding:14px;cursor:pointer}.item:hover,.item.active{background:#eef8fb}.item strong{display:block;line-height:1.4}.meta,.muted{color:var(--muted);font-size:12px}.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.badge{font-size:11px;padding:3px 7px;border-radius:4px;background:#edf2f4}.official{color:var(--good);background:#e8f6ee}.detail{padding:22px;min-height:520px}.detail h2{font-size:22px;line-height:1.4;margin:0 0 8px}.section{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}.section h3{font-size:15px;margin:0 0 10px}.fact,.article{padding:10px 0;border-bottom:1px solid #edf1f2}.fact:last-child,.article:last-child{border-bottom:0}.fact-type{font-size:11px;color:var(--blue);font-weight:700;margin-right:7px}.article a{color:#12688a;text-decoration:none}.article p{font-size:13px;color:#4e5d66;margin:5px 0}.empty{padding:50px 20px;text-align:center;color:var(--muted)}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+    .validation{border:1px solid #bae6fd;background:#f0f9ff;border-radius:6px;padding:13px;margin-top:18px}.validation.blocked{border-color:#fecaca;background:#fef2f2}.validation h3{margin:0 0 9px;font-size:14px}.validation-list{list-style:none;margin:0;padding:0;display:grid;gap:7px}.validation-list li{font-size:12px;color:#475569;display:flex;gap:7px}.validation-list li::before{content:"●";color:var(--good)}.validation-list li.warn::before{color:#f59e0b}.validation-list li.bad::before{color:var(--bad)}
     @media(max-width:760px){.toolbar{flex-wrap:wrap}.field.small{max-width:none}.toolbar .field{min-width:140px}main{grid-template-columns:1fr}.list{max-height:330px}}
   </style>
 </head>
 <body>
-  <header class="top"><h1>COA NEWS 리서치 브리프</h1><p>수집된 사건, 근거 기사, 구조화 사실을 편집 검토용으로 묶어 봅니다.</p></header>
+  <header class="top"><h1>COA NEWS 리서치 브리프</h1><p>근거와 출처를 검증한 뒤 실제 기사 초안 작업으로 넘깁니다.</p></header>
   <section class="toolbar">
     <div class="field"><label>관리자 세션</label><button class="btn secondary" id="logout" type="button">로그아웃</button></div>
     <div class="field small"><label for="category">분야</label><select id="category"><option value="">전체</option><option value="ai_business">AI 비즈니스</option><option value="startup">창업·부업</option><option value="policy">정책·지원사업</option></select></div>
@@ -21,27 +22,146 @@
     <button class="btn" id="load">브리프 불러오기</button>
   </section>
   <main>
-    <section class="panel list" id="list"><div class="empty">인증키를 입력하고 브리프를 불러오세요.</div></section>
+    <section class="panel list" id="list"><div class="empty">브리프를 불러오는 중입니다.</div></section>
     <section class="panel detail" id="detail"><div class="empty">왼쪽에서 사건을 선택하세요.</div></section>
   </main>
   <script src="/auth-session.js"></script>
   <script>
-    const $=id=>document.getElementById(id); let briefs=[]; let selected=null;
-    $('load').onclick=loadBriefs;
-    async function loadBriefs(){
-      $('load').disabled=true; $('load').textContent='불러오는 중';
-      const qs=new URLSearchParams({limit:'100'}); if($('category').value)qs.set('category',$('category').value);if($('statusFilter').value)qs.set('status',$('statusFilter').value);
-      qs.set('view','briefs');try{const r=await CoaAuth.request('/api/editorial/drafts?'+qs);const data=await r.json();if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);briefs=data.briefs||[];renderList();if(briefs[0])showBrief(briefs[0].id);}
-      catch(e){$('list').innerHTML=`<div class="empty">${esc(e.message)}</div>`;}finally{$('load').disabled=false;$('load').textContent='브리프 불러오기';}
+    const $ = (id) => document.getElementById(id);
+    let briefs = [];
+    let selected = null;
+
+    $('load').onclick = loadBriefs;
+    $('logout').onclick = CoaAuth.logout;
+
+    async function loadBriefs() {
+      $('load').disabled = true;
+      $('load').textContent = '불러오는 중';
+      const qs = new URLSearchParams({ limit:'100', view:'briefs' });
+      if ($('category').value) qs.set('category', $('category').value);
+      if ($('statusFilter').value) qs.set('status', $('statusFilter').value);
+      try {
+        const response = await CoaAuth.request(`/api/editorial/drafts?${qs}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        briefs = data.briefs || [];
+        renderList();
+        if (briefs[0]) showBrief(briefs[0].id);
+        else $('detail').innerHTML = '<div class="empty">조건에 맞는 브리프가 없습니다.</div>';
+      } catch (error) {
+        $('list').innerHTML = `<div class="empty">${esc(error.message)}</div>`;
+      } finally {
+        $('load').disabled = false;
+        $('load').textContent = '브리프 불러오기';
+      }
     }
-    function renderList(){$('list').innerHTML=briefs.length?briefs.map(b=>`<button class="item ${selected===b.id?'active':''}" data-id="${b.id}"><strong>${esc(b.representative_title)}</strong><span class="meta">${label(b.category)} · ${b.event_date||'날짜 미상'}</span><span class="badges"><span class="badge">기사 ${b.article_count}</span><span class="badge official">공식 ${b.official_source_count}</span><span class="badge">사실 ${b.facts.length}</span></span></button>`).join(''):'<div class="empty">조건에 맞는 브리프가 없습니다.</div>';$('list').querySelectorAll('[data-id]').forEach(el=>el.onclick=()=>showBrief(Number(el.dataset.id)));}
-    function showBrief(id){selected=id;const b=briefs.find(x=>x.id===id);if(!b)return;renderList();const facts=b.facts.map(f=>`<div class="fact"><span class="fact-type">${esc(f.fact_type)}</span>${esc(f.fact_text)} ${f.is_official?'<span class="badge official">공식 확인</span>':''}</div>`).join('')||'<p class="muted">추출된 사실이 없습니다.</p>';const articles=b.articles.map(a=>`<div class="article"><a href="${esc(a.url)}" target="_blank" rel="noopener"><strong>${esc(a.title)}</strong></a><div class="meta">${esc(a.source_domain||'')} · 품질 ${a.quality_score} · ${esc(a.verification_status)}</div>${a.summary?`<p>${esc(a.summary)}</p>`:''}</div>`).join('');$('detail').innerHTML=`<div class="meta">${label(b.category)} · ${b.event_date||'날짜 미상'} · ${esc(b.status)}</div><h2>${esc(b.representative_title)}</h2><div class="badges"><span class="badge">기사 ${b.article_count}</span><span class="badge official">공식 출처 ${b.official_source_count}</span><span class="badge">사실 ${b.facts.length}</span></div><div class="section"><h3>확인된 사실</h3>${facts}</div><div class="section"><h3>근거 기사</h3>${articles}</div><div class="actions"><button class="btn" id="generate">AI 맥락 요약</button><button class="btn secondary" id="prepare">등록용 기사 준비</button><button class="btn secondary" id="copy">브리프 복사</button><a class="btn secondary" href="/editorial-drafts">소재 초안</a></div>`;$('generate').onclick=()=>generateDraft(b);$('prepare').onclick=()=>prepareDraft(b);$('copy').onclick=()=>copyBrief(b);}
-    async function generateDraft(b){const button=$('generate');button.disabled=true;button.textContent='생성 중';try{const r=await CoaAuth.request('/api/editorial/drafts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({eventClusterId:b.id})});const data=await r.json();if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);location.href='/editorial-drafts?draft='+data.draft.id;}catch(e){alert(e.message)}finally{button.disabled=false;button.textContent='AI 맥락 요약';}}
-    function prepareDraft(b){const primary=b.articles[0]||{};localStorage.setItem('coa_news_draft_seed',JSON.stringify({title:b.representative_title,summary:[...b.facts.map(f=>f.fact_text),primary.summary].filter(Boolean).join('\n'),source_name:primary.source_domain||'COA NEWS 리서치',source_url:primary.url||'',category:b.category,event_cluster_id:b.id,references:b.articles.map(a=>a.url)}));window.open('/coanews-draft','_blank','noopener');}
-    async function copyBrief(b){const text=[b.representative_title,`분야: ${label(b.category)}`,`기준일: ${b.event_date||'미상'}`,'','[확인된 사실]',...b.facts.map(f=>`- ${f.fact_text}${f.is_official?' (공식)':''}`),'','[근거 기사]',...b.articles.map(a=>`- ${a.title}\n  ${a.url}`)].join('\n');await navigator.clipboard.writeText(text);alert('브리프를 복사했습니다.');}
-    function label(v){return{ai_business:'AI 비즈니스',startup:'창업·부업',policy:'정책·지원사업'}[v]||v;}function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-    $('logout').onclick=CoaAuth.logout;
-    CoaAuth.requireSession().then((authenticated)=>{if(authenticated)loadBriefs();});
+
+    function renderList() {
+      $('list').innerHTML = briefs.length
+        ? briefs.map((brief) => `<button class="item ${selected === brief.id ? 'active' : ''}" data-id="${brief.id}"><strong>${esc(brief.representative_title)}</strong><span class="meta">${label(brief.category)} · ${brief.event_date || '날짜 미상'}</span><span class="badges"><span class="badge">기사 ${brief.article_count}</span><span class="badge official">공식 ${brief.official_source_count}</span><span class="badge">사실 ${brief.facts.length}</span></span></button>`).join('')
+        : '<div class="empty">조건에 맞는 브리프가 없습니다.</div>';
+      $('list').querySelectorAll('[data-id]').forEach((element) => {
+        element.onclick = () => showBrief(Number(element.dataset.id));
+      });
+    }
+
+    function showBrief(id) {
+      selected = id;
+      const brief = briefs.find((item) => item.id === id);
+      if (!brief) return;
+      renderList();
+      const validation = validateBrief(brief);
+      const facts = brief.facts.map((fact) => `<div class="fact"><span class="fact-type">${esc(fact.fact_type)}</span>${esc(fact.fact_text)} ${fact.is_official ? '<span class="badge official">공식 확인</span>' : ''}</div>`).join('') || '<p class="muted">추출된 사실이 없습니다.</p>';
+      const articles = brief.articles.map((article) => `<div class="article"><a href="${esc(article.url)}" target="_blank" rel="noopener"><strong>${esc(article.title)}</strong></a><div class="meta">${esc(article.source_domain || '')} · 품질 ${article.quality_score} · ${esc(article.verification_status)}</div>${article.summary ? `<p>${esc(article.summary)}</p>` : ''}</div>`).join('');
+      $('detail').innerHTML = `
+        <div class="meta">${label(brief.category)} · ${brief.event_date || '날짜 미상'} · ${esc(brief.status)}</div>
+        <h2>${esc(brief.representative_title)}</h2>
+        <div class="badges"><span class="badge">기사 ${brief.article_count}</span><span class="badge official">공식 출처 ${brief.official_source_count}</span><span class="badge">사실 ${brief.facts.length}</span></div>
+        ${validationHtml(validation)}
+        <div class="section"><h3>확인된 사실</h3>${facts}</div>
+        <div class="section"><h3>근거 기사</h3>${articles}</div>
+        <div class="actions">
+          <button class="btn" id="prepare" ${validation.ready ? '' : 'disabled'}>검증 후 기사 초안 준비</button>
+          <button class="btn secondary" id="copy">브리프 복사</button>
+        </div>`;
+      $('prepare').onclick = () => prepareDraft(brief, validation);
+      $('copy').onclick = () => copyBrief(brief);
+    }
+
+    function validateBrief(brief) {
+      const blockers = [];
+      const warnings = [];
+      const hasUrl = brief.articles.some((article) => Boolean(article.url));
+      const hasVerified = brief.articles.some((article) => article.verification_status === 'verified');
+      const hasOfficial = Number(brief.official_source_count || 0) > 0;
+      if (!brief.representative_title?.trim()) blockers.push('대표 제목이 없습니다.');
+      if (!brief.articles.length) blockers.push('근거 기사가 없습니다.');
+      if (brief.articles.length && !hasUrl) blockers.push('사용 가능한 근거 URL이 없습니다.');
+      if (!hasVerified && !hasOfficial) blockers.push('공식 또는 검증된 출처가 필요합니다.');
+      if (brief.status !== 'ready') warnings.push('브리프 상태가 작성 가능(ready)이 아닙니다.');
+      if (!brief.facts.length) warnings.push('구조화 사실이 없어 원문 재확인이 필요합니다.');
+      if (!hasOfficial) warnings.push('공식 출처가 없어 인용 범위를 추가 검토해야 합니다.');
+      return { ready:blockers.length === 0, blockers, warnings };
+    }
+
+    function validationHtml(validation) {
+      const passed = validation.ready ? ['대표 제목·근거 기사·출처 URL·검증 출처 확인'] : [];
+      const items = [
+        ...passed.map((text) => `<li>${esc(text)}</li>`),
+        ...validation.warnings.map((text) => `<li class="warn">${esc(text)}</li>`),
+        ...validation.blockers.map((text) => `<li class="bad">${esc(text)}</li>`),
+      ].join('');
+      return `<section class="validation ${validation.ready ? '' : 'blocked'}"><h3>${validation.ready ? '기사 준비 검증 통과' : '기사 준비 불가'}</h3><ul class="validation-list">${items}</ul></section>`;
+    }
+
+    async function prepareDraft(brief, validation) {
+      if (!validation.ready) return;
+      if (validation.warnings.length && !confirm(`검토 경고가 ${validation.warnings.length}건 있습니다. 원문을 다시 확인하면서 기사 초안 작업을 진행할까요?`)) return;
+      const button = $('prepare');
+      button.disabled = true;
+      button.textContent = '초안 준비 중';
+      try {
+        const response = await CoaAuth.request('/api/editorial/drafts', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body:JSON.stringify({ action:'prepare', eventClusterId:brief.id }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        localStorage.setItem('coa_news_draft_seed', JSON.stringify(data.seed));
+        location.href = `/coanews-draft?draft=${encodeURIComponent(data.draft.id)}`;
+      } catch (error) {
+        alert(error.message);
+        button.disabled = false;
+        button.textContent = '검증 후 기사 초안 준비';
+      }
+    }
+
+    async function copyBrief(brief) {
+      const text = [
+        brief.representative_title,
+        `분야: ${label(brief.category)}`,
+        `기준일: ${brief.event_date || '미상'}`,
+        '',
+        '[확인된 사실]',
+        ...brief.facts.map((fact) => `- ${fact.fact_text}${fact.is_official ? ' (공식)' : ''}`),
+        '',
+        '[근거 기사]',
+        ...brief.articles.map((article) => `- ${article.title}\n  ${article.url}`),
+      ].join('\n');
+      await navigator.clipboard.writeText(text);
+      alert('브리프를 복사했습니다.');
+    }
+
+    function label(value) {
+      return { ai_business:'AI 비즈니스', startup:'창업·부업', policy:'정책·지원사업' }[value] || value;
+    }
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char]));
+    }
+
+    CoaAuth.requireSession().then((authenticated) => { if (authenticated) loadBriefs(); });
   </script>
 </body>
 </html>

@@ -20,7 +20,9 @@ assert.match(agentCollector, /loadRssEntries\(feed\)/);
 assert.match(compose, /n8nio\/n8n:\$\{N8N_VERSION:-2\.30\.7\}/);
 assert.equal(legacyCollect.active, false);
 assert.equal(legacySuggest.active, false);
-assert.match(standard, /200~1600자/);
+assert.match(standard, /리서치 검증 기준/);
+assert.match(standard, /등록용 기사 준비 화면으로 넘겨 실제 본문을 작성합니다/);
+assert.doesNotMatch(standard, /맥락 요약/);
 assert.match(standard, /원시 수집 단계에서는 OpenAI를 호출하지 않습니다/);
 
 process.stdout.write('Operating standard checks passed.\n');
