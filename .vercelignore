@@ -1,0 +1,4 @@
+.pytest_cache
+.pnpm-store
+__pycache__
+*.pyc
