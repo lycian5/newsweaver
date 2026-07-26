@@ -4,6 +4,7 @@
 const http = require('node:http');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { notifyCollectionResult } = require('./collection-notifications');
 
 const repoRoot = path.resolve(__dirname, '..');
 const host = process.env.AGENT_REACH_RUNNER_HOST || '0.0.0.0';
@@ -48,7 +49,15 @@ const server = http.createServer(async (req, res) => {
     const args = buildCollectorArgs(body || {});
     activeRun = runCollector(args);
     if (body?.async === true) {
-      activeRun.finally(() => { activeRun = null; });
+      activeRun
+        .then(async (result) => {
+          if (!isDryRun(body)) {
+            const notification = await notifyCollectionResult(result, body);
+            if (!notification.sent) console.log(`Collection notification skipped: ${notification.reason}`);
+          }
+        })
+        .catch((err) => { console.error(`Collection notification error: ${err.message}`); })
+        .finally(() => { activeRun = null; });
       sendJson(res, 202, { ok: true, accepted: true, args });
       return;
     }
@@ -162,4 +171,8 @@ function sendJson(res, status, body) {
 
 function camelCase(value) {
   return value.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+}
+
+function isDryRun(body) {
+  return body?.['dry-run'] === true || body?.dryRun === true;
 }

@@ -8,6 +8,7 @@
     "test:models": "node tests/test_openai_models.js",
     "test:agent-reach": "node tests/test_agent_reach_options.js",
     "test:agent-reach-runner": "node tests/test_agent_reach_runner.js",
+    "test:collection-notifications": "node tests/test_collection_notifications.js",
     "test:research-metadata": "node tests/test_research_metadata.js",
     "test:research-taxonomy": "node tests/test_research_query_taxonomy.js",
     "test:collection-schedule": "node tests/test_collection_schedule.js",

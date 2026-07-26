@@ -111,7 +111,7 @@ Invoke-Step "Upload deploy/n8n files" {
     & scp -r ./ "${RemoteHost}:${RemoteDir}/"
 }
 Invoke-Step "Upload Agent Reach scripts and workflows" {
-    & scp (Join-Path $ProjectDir "scripts\agent-reach-collect.js") (Join-Path $ProjectDir "scripts\agent-reach-runner.js") (Join-Path $ProjectDir "scripts\keyword-selection.js") (Join-Path $ProjectDir "scripts\research-query-taxonomy.js") "${RemoteHost}:${RemoteDir}/scripts/"
+    & scp (Join-Path $ProjectDir "scripts\agent-reach-collect.js") (Join-Path $ProjectDir "scripts\agent-reach-runner.js") (Join-Path $ProjectDir "scripts\collection-notifications.js") (Join-Path $ProjectDir "scripts\keyword-selection.js") (Join-Path $ProjectDir "scripts\research-query-taxonomy.js") "${RemoteHost}:${RemoteDir}/scripts/"
     & scp (Join-Path $ProjectDir "n8n\workflow_agent_reach_collect.json") "${RemoteHost}:${RemoteDir}/workflows/"
 }
 

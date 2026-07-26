@@ -35,6 +35,7 @@ if (require.main === module) {
 }
 
 async function main() {
+  const runStartedAt = new Date().toISOString();
   const keywords = await loadKeywords();
   const limitedKeywords = inlineKeywords.length
     ? keywords.slice(0, limitKeywords)
@@ -70,6 +71,7 @@ async function main() {
 
   const rows = dedupeRows(allRows);
   let clustersAssigned = 0;
+  let readyBriefs = 0;
   if (!dryRun && rows.length) {
     const savedRows = await upsertRawArticles(rows);
     clustersAssigned = await assignEventClusters(savedRows);
@@ -77,6 +79,11 @@ async function main() {
     await backfillMissingClusterDates();
     factsExtracted = await upsertArticleFacts(savedRows);
     await touchKeywords(rows);
+    try {
+      readyBriefs = await countReadyBriefsSince(runStartedAt);
+    } catch (err) {
+      failures.push({ source: 'briefs', keyword: '', error: `Ready brief count failed: ${err.message}` });
+    }
   }
 
   const summary = {
@@ -87,10 +94,22 @@ async function main() {
     rowsPrepared: rows.length,
     rowsUpserted: dryRun ? 0 : rows.length,
     clustersAssigned,
+    readyBriefs,
     factsExtracted,
     failures,
   };
   console.log(JSON.stringify(summary, null, 2));
+}
+
+async function countReadyBriefsSince(since) {
+  const qs = new URLSearchParams({
+    status: 'eq.ready',
+    last_seen_at: `gte.${since}`,
+    select: 'id',
+    limit: '1000',
+  });
+  const rows = await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/event_clusters?${qs.toString()}`);
+  return rows.length;
 }
 
 async function loadKeywords() {

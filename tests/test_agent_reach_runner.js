@@ -5,7 +5,10 @@ const source = fs.readFileSync(require.resolve('../scripts/agent-reach-runner'),
 const workflow = JSON.parse(fs.readFileSync(require.resolve('../n8n/workflow_agent_reach_collect.json'), 'utf8'));
 assert.match(source, /body\?\.async === true/);
 assert.match(source, /accepted: true/);
-assert.match(source, /activeRun\.finally/);
+assert.match(source, /\.finally\(\(\) => \{ activeRun = null; \}\)/);
+assert.match(source, /notifyCollectionResult/);
+assert.match(source, /Collection notification skipped/);
+assert.match(source, /isDryRun/);
 const prepareNode = workflow.nodes.find((node) => node.id === 'prepare-runner');
 const callNode = workflow.nodes.find((node) => node.id === 'call-runner');
 const summaryNode = workflow.nodes.find((node) => node.id === 'format-summary');
