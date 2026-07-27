@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://aimax-004-v1-codex.vercel.app/coanews-draft.schema.json",
+  "$id": "https://newsweaver.vercel.app/coanews-draft.schema.json",
   "title": "COA NEWS article approved for manual registration",
   "type": "object",
   "required": [

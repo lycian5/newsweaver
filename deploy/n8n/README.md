@@ -17,7 +17,7 @@ Agent Reach의 기본 운영값은 Exa, 공식 출처, RSS를 이용해 활성 �
 ## Windows 자동 배포
 
 ```powershell
-cd C:\Users\user\Documents\aimax004_v1_codex\deploy\n8n
+cd C:\Users\user\orca\projects\newsweaver\deploy\n8n
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
 ```
 

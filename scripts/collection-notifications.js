@@ -17,7 +17,7 @@ function formatCollectionNotification(result, request = {}) {
 
   if (failures.length) lines.push(`Source failures: ${failures.length}`);
   if (failed && result.stderr) lines.push(`Error: ${oneLine(result.stderr, 500)}`);
-  lines.push('Review briefs: https://aimax-004-v1-codex.vercel.app/research-briefs');
+  lines.push('Review briefs: https://newsweaver.vercel.app/research-briefs');
   return lines.join('\n');
 }
 

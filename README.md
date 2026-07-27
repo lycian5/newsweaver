@@ -1,4 +1,4 @@
-# aimax004_v1_codex
+# newsweaver
 
 COA NEWS의 대량 기사 소재 수집, 중복 제거, 점수화, 리서치 검증과 등록용 기사 초안 작업을 제공하는 운영 프로젝트입니다.
 
@@ -6,7 +6,7 @@ COA NEWS의 대량 기사 소재 수집, 중복 제거, 점수화, 리서치 검
 
 ## 운영 화면
 
-- 배포 URL: `https://aimax-004-v1-codex.vercel.app`
+- 배포 URL: `https://newsweaver.vercel.app`
 - 수집 제어: `/vps-collector`
 - 리서치 브리프: `/research-briefs`
 - 등록용 기사 준비: `/coanews-draft`
@@ -38,8 +38,8 @@ DASHBOARD_SESSION_SECRET=<선택, 32자 이상의 별도 세션 비밀값>
 
 ## Vercel 배포
 
-- GitHub: `lycian5/AIMAX004_V1_codex`
-- Vercel 프로젝트: `aimax-004-v1-codex`
+- GitHub: `lycian5/newsweaver`
+- Vercel 프로젝트: `newsweaver`
 - Framework Preset: Other
 - Output Directory: `docs`
 
@@ -48,7 +48,7 @@ DASHBOARD_SESSION_SECRET=<선택, 32자 이상의 별도 세션 비밀값>
 ## VPS 및 n8n 배포
 
 ```powershell
-cd C:\Users\user\Documents\aimax004_v1_codex\deploy\n8n
+cd C:\Users\user\orca\projects\newsweaver\deploy\n8n
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\deploy.ps1
 ```
 

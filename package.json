@@ -1,5 +1,5 @@
 {
-  "name": "aimax-004-v1-codex",
+  "name": "newsweaver",
   "version": "0.1.0",
   "private": true,
   "description": "High-volume news material collection, scoring, research brief, and editorial context pipeline.",
