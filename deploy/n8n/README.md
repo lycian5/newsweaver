@@ -56,7 +56,7 @@ ssh -L 5678:127.0.0.1:5678 root@158.247.245.66
 - AI는 원시 수집에 사용하지 않고 선택된 브리프의 200~1600자 맥락 요약에만 사용
 - `n8n/workflow_collect.json`과 `n8n/workflow_suggest.json`은 보관용이며 활성화하지 않음
 
-`workflow_agent_reach_collect.json`을 n8n에 import한 경우 환경변수를 확인한 뒤 이 워크플로만 명시적으로 활성화합니다.
+`workflow_agent_reach_collect.json`을 n8n에 import한 경우 환경변수를 확인한 뒤 이 워크플로를 활성 상태로 유지합니다.
 
 자동 수집 시간은 `/vps-collector`의 `자동 수집 일정`에서 설정합니다. 이 워크플로는 5분마다 Supabase 설정을 확인해 선택한 KST 시각에만 실행합니다. 배포 후 `workflows/workflow_agent_reach_collect.json`을 n8n에 다시 import하고 기존 Agent Reach 워크플로를 교체한 뒤 활성화합니다.
 

@@ -18,10 +18,16 @@ assert.equal(scheduleFromRow({ enabled: true, daily_time: '07:45:00' }).dailyTim
 
 const endpoint = fs.readFileSync(require.resolve('../api/operations/schedule'), 'utf8');
 const migration = fs.readFileSync(require.resolve('../supabase/migrations/20260725_collection_schedule.sql'), 'utf8');
+const alignmentMigration = fs.readFileSync(require.resolve('../supabase/migrations/20260727_align_collection_schedule.sql'), 'utf8');
+const workflow = JSON.parse(fs.readFileSync(require.resolve('../n8n/workflow_agent_reach_collect.json'), 'utf8'));
 const dashboard = fs.readFileSync(require.resolve('../docs/vps-collector.html'), 'utf8');
 assert.match(endpoint, /assertCronAuth/);
 assert.match(endpoint, /collection_schedules/);
 assert.match(migration, /daily_time time/);
+assert.equal(workflow.active, true);
+assert.match(JSON.stringify(workflow), /16:30/);
+assert.match(alignmentMigration, /daily_time set default '16:30'/);
+assert.match(alignmentMigration, /values \('agent_reach', true, '16:30'/);
 assert.match(dashboard, /\/api\/operations\/schedule/);
 assert.match(dashboard, /권장 일과 후 발행 흐름/);
 assert.match(dashboard, /16:30/);
