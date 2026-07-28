@@ -28,8 +28,9 @@
         <label><input type="checkbox" name="source" value="rss" checked /> RSS</label>
         <label><input type="checkbox" name="source" value="youtube" /> YouTube</label>
         <label><input type="checkbox" name="source" value="github" /> GitHub</label>
+        <label><input type="checkbox" name="source" value="reddit" /> Reddit</label>
       </div>
-      <p class="hint">공식 출처는 정부·공공기관 도메인으로 제한합니다. YouTube와 GitHub는 VPS 인증 설정 후 선택하세요.</p>
+      <p class="hint">공식 출처는 정부·공공기관 도메인으로 제한합니다. YouTube·GitHub·Reddit은 VPS 인증 설정 후 선택하세요.</p>
       <div class="keyword-summary">
         <div class="keyword-head"><strong>자동 수집 키워드</strong><button id="loadKeywords" class="btn" type="button">키워드 확인</button></div>
         <div class="keyword-groups">
@@ -43,6 +44,7 @@
         <div class="field"><label for="exaResults">Exa 결과 수</label><input id="exaResults" type="number" min="1" max="10" value="5" /></div>
         <div class="field"><label for="officialResults">공식 출처 결과 수</label><input id="officialResults" type="number" min="1" max="10" value="3" /></div>
         <div class="field"><label for="rssResults">RSS 결과 수</label><input id="rssResults" type="number" min="1" max="20" value="8" /></div>
+        <div class="field"><label for="redditResults">Reddit 결과 수</label><input id="redditResults" type="number" min="1" max="25" value="5" /></div>
         <div class="field"><label>관리자 세션</label><button id="logout" class="btn" type="button">로그아웃</button></div>
       </div>
       <div class="field" style="margin-top:14px"><label for="keywords">직접 키워드 (선택)</label><textarea id="keywords" placeholder="AI 스타트업, 소상공인 지원, 업무 자동화"></textarea></div>
@@ -136,6 +138,7 @@
             exaResults: document.getElementById('exaResults').value,
             officialResults: document.getElementById('officialResults').value,
             rssResults: document.getElementById('rssResults').value,
+            redditResults: document.getElementById('redditResults').value,
             keywords: document.getElementById('keywords').value,
           }),
         });

@@ -21,10 +21,24 @@ DASHBOARD_SESSION_SECRET=<선택, 32자 이상의 별도 세션 비밀값>
 
 `CRON_SECRET`을 사람의 로그인 비밀번호로 사용하지 않습니다. `/admin-login`에서 로그인하면 세션은 7일간 유지됩니다.
 
+### Reddit 수집 설정
+
+Reddit의 비공식 `.json` 엔드포인트는 운영 수집에 사용하지 않습니다. Reddit 개발자 콘솔에서 읽기 전용 API 사용이 승인된 앱을 만든 뒤, VPS의 `/opt/n8n/.env`에 아래 값만 설정합니다. Vercel 환경변수에는 넣지 않습니다.
+
+```text
+REDDIT_CLIENT_ID=<앱 client id>
+REDDIT_CLIENT_SECRET=<앱 client secret>
+REDDIT_USER_AGENT=script:coa-newsweaver:v1.0 (by /u/lycian57)
+AGENT_REACH_SOURCES=exa,official,rss,reddit
+AGENT_REACH_REDDIT_RESULTS=5
+```
+
+수집기는 OAuth 토큰을 메모리에서 재사용하고, Reddit 결과는 신호 출처로만 기록합니다. 기사 초안 준비에는 기존의 공식·검증 출처 검사가 계속 적용됩니다.
+
 ## 수집 전략
 
 - Vercel 기본 수집은 Naver와 Google 중심으로 매일 18개 키워드를 처리합니다.
-- VPS Agent Reach는 Exa, 공식 기관, RSS를 중심으로 매일 54개 키워드를 처리합니다.
+- VPS Agent Reach는 Exa, 공식 기관, RSS를 중심으로 매일 54개 키워드를 처리합니다. RSS는 신뢰 가능한 기술·창업 피드를 기본으로 사용하며, `AGENT_REACH_JINA_ENRICH=true`일 때 원문 보강을 수행합니다.
 - 원시 수집에는 OpenAI를 사용하지 않습니다.
 - 중복 제거, 출처 평가, 점수화, 사건 클러스터링 후 최대 100개 브리프를 표시합니다.
 - 리서치 브리프에서 대표 제목, 근거 기사, 출처 URL, 공식·검증 출처를 확인한 뒤 기사 초안을 시작합니다.

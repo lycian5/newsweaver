@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const {
   buildOfficialSearchQuery,
+  buildRedditSearchQuery,
   classifySource,
   dateDistanceDays,
   eventFingerprint,
@@ -85,6 +86,7 @@ assert.equal(findMatchingCluster({
   fingerprint: 'old-fingerprint',
 }]).id, 8);
 assert.match(buildOfficialSearchQuery({ keyword: '창업 지원', category: 'policy' }), /site:korea\.kr/);
+assert.match(buildRedditSearchQuery({ keyword: 'AI 에이전트', category: 'ai_business' }), /AI agent automation business/);
 const facts = extractFacts({
   id: 11,
   event_cluster_id: 4,

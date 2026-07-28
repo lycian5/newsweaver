@@ -57,6 +57,8 @@ create table if not exists event_clusters (
   last_seen_at timestamptz not null default now(),
   article_count int not null default 1,
   official_source_count int not null default 0,
+  independent_source_count int not null default 0 check (independent_source_count >= 0),
+  editorial_state text not null default 'unreviewed' check (editorial_state in ('unreviewed', 'reviewing', 'held', 'prepared')),
   status text not null default 'developing' check (status in ('developing', 'ready', 'archived'))
 );
 
@@ -101,6 +103,12 @@ create table if not exists editorial_drafts (
 
 create index if not exists editorial_drafts_status_idx on editorial_drafts(status, updated_at desc);
 create index if not exists editorial_drafts_cluster_idx on editorial_drafts(event_cluster_id, created_at desc);
+
+alter table event_clusters
+  add column if not exists prepared_draft_id bigint references editorial_drafts(id) on delete set null;
+
+create index if not exists event_clusters_editorial_state_idx
+  on event_clusters(editorial_state, last_seen_at desc);
 
 create table if not exists topic_suggestions (
   id bigint generated always as identity primary key,

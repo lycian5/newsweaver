@@ -12,7 +12,7 @@ Vultr Ubuntu 24.04의 `/opt/n8n`에 Postgres 16, n8n `2.30.7`, Agent Reach runne
 4. `POSTGRES_PASSWORD`, `N8N_ENCRYPTION_KEY`, `AGENT_REACH_RUNNER_SECRET`, `AGENT_REACH_WEBHOOK_SECRET`, `BACKUP_ENCRYPTION_PASSWORD`는 서로 다른 강한 값으로 설정합니다.
 5. `.env`와 백업 암호는 Git에 커밋하지 않습니다.
 
-Agent Reach의 기본 운영값은 Exa, 공식 출처, RSS를 이용해 활성 키워드 54개를 처리합니다. 핵심 12개는 매회 포함하고 나머지 42개는 확장 키워드 풀에서 순환합니다. YouTube와 GitHub는 각각 인증과 쿠키 설정을 마친 뒤 선택적으로 추가합니다.
+Agent Reach의 기본 운영값은 Exa, 공식 출처, RSS를 이용해 활성 키워드 54개를 처리합니다. 핵심 12개는 매회 포함하고 나머지 42개는 확장 키워드 풀에서 순환합니다. YouTube와 GitHub는 각각 인증과 쿠키 설정을 마친 뒤 선택적으로 추가합니다. Reddit은 승인된 읽기 전용 OAuth 앱의 `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USER_AGENT`를 VPS `.env`에만 넣은 후 `AGENT_REACH_SOURCES`에 `reddit`을 추가합니다.
 
 ## Windows 자동 배포
 

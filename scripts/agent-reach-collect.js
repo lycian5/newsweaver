@@ -11,7 +11,16 @@ const {
 } = require('./research-query-taxonomy');
 
 const DEFAULT_SOURCES = ['exa', 'official', 'rss'];
+const DEFAULT_RSS_FEEDS = [
+  'TechCrunch AI|https://techcrunch.com/category/artificial-intelligence/feed/|ai_business',
+  'VentureBeat AI|https://venturebeat.com/category/ai/feed/|ai_business',
+  'Wired AI|https://www.wired.com/feed/tag/ai/latest/rss|ai_business',
+  'Ars Technica Technology Lab|https://feeds.arstechnica.com/arstechnica/technology-lab|ai_business',
+  'TechCrunch Startups|https://techcrunch.com/category/startups/feed/|startup',
+].join(',');
 const rssFeedCache = new Map();
+const jinaPageCache = new Map();
+let redditAccessToken = null;
 
 const args = parseArgs(process.argv.slice(2));
 const dryRun = boolArg('dry-run', false);
@@ -24,6 +33,7 @@ const exaResults = intArg('exa-results', process.env.AGENT_REACH_EXA_RESULTS, 5)
 const officialResults = intArg('official-results', process.env.AGENT_REACH_OFFICIAL_RESULTS, 3);
 const youtubeResults = intArg('youtube-results', process.env.AGENT_REACH_YOUTUBE_RESULTS, 3);
 const githubResults = intArg('github-results', process.env.AGENT_REACH_GITHUB_RESULTS, 5);
+const redditResults = intArg('reddit-results', process.env.AGENT_REACH_REDDIT_RESULTS, 5);
 const timeoutMs = intArg('timeout-ms', process.env.AGENT_REACH_TIMEOUT_MS, 45000);
 const jinaEnrich = boolArg('jina-enrich', parseBool(process.env.AGENT_REACH_JINA_ENRICH, false));
 
@@ -56,6 +66,7 @@ async function main() {
       ['rss', collectRss],
       ['youtube', collectYoutube],
       ['github', collectGithub],
+      ['reddit', collectReddit],
     ];
 
     for (const [name, collector] of collectors) {
@@ -217,8 +228,66 @@ async function collectGithub(keyword) {
   }));
 }
 
+async function collectReddit(keyword) {
+  const token = await getRedditAccessToken();
+  const url = new URL('https://oauth.reddit.com/search');
+  url.searchParams.set('q', buildRedditSearchQuery(keyword));
+  url.searchParams.set('sort', 'new');
+  url.searchParams.set('t', 'week');
+  url.searchParams.set('type', 'link');
+  url.searchParams.set('limit', String(Math.min(redditResults, 100)));
+  url.searchParams.set('raw_json', '1');
+  const res = await fetchWithTimeout(url, timeoutMs, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'User-Agent': redditUserAgent(),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Reddit HTTP ${res.status}: ${text.slice(0, 300)}`);
+  }
+  const payload = await res.json();
+  return (payload?.data?.children || [])
+    .map((item) => item?.data)
+    .filter((post) => post?.permalink && post?.title)
+    .map((post) => makeRow(keyword, {
+      source: 'agent_reach_reddit',
+      title: post.title,
+      url: `https://www.reddit.com${post.permalink}`,
+      summary: post.selftext || post.url || null,
+      published_at: post.created_utc ? new Date(post.created_utc * 1000).toISOString() : null,
+      query_stage: 'explore',
+      source_layer: 'signal',
+    }));
+}
+
+async function getRedditAccessToken() {
+  if (redditAccessToken?.expiresAt > Date.now() + 60000) return redditAccessToken.value;
+  const clientId = requiredEnv('REDDIT_CLIENT_ID');
+  const clientSecret = requiredEnv('REDDIT_CLIENT_SECRET');
+  const res = await fetchWithTimeout('https://www.reddit.com/api/v1/access_token', timeoutMs, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': redditUserAgent(),
+    },
+    body: 'grant_type=client_credentials',
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok || !payload.access_token) {
+    throw new Error(`Reddit OAuth token request failed: ${payload.error || `HTTP ${res.status}`}`);
+  }
+  redditAccessToken = {
+    value: payload.access_token,
+    expiresAt: Date.now() + Math.max(60, Number(payload.expires_in || 3600) - 60) * 1000,
+  };
+  return redditAccessToken.value;
+}
+
 async function collectRss(keyword) {
-  const feeds = parseFeeds(process.env.AGENT_REACH_RSS_FEEDS || '');
+  const feeds = parseFeeds(process.env.AGENT_REACH_RSS_FEEDS || DEFAULT_RSS_FEEDS);
   const matchingFeeds = feeds.filter((feed) => !feed.category || feed.category === keyword.category);
   const rows = [];
 
@@ -228,11 +297,12 @@ async function collectRss(keyword) {
       for (const entry of entries) {
         if (!entry.url || !entry.title) continue;
         if (!matchesKeyword(entry, keyword)) continue;
+        const enriched = await maybeEnrichWithJina(entry);
         rows.push(makeRow(keyword, {
           source: `agent_reach_rss:${feed.name}`,
-          title: entry.title,
+          title: enriched.title || entry.title,
           url: entry.url,
-          summary: entry.summary,
+          summary: enriched.summary || entry.summary,
           published_at: entry.published_at,
           query_stage: 'explore',
           source_layer: isOfficialDomain(entry.url) ? 'official' : 'signal',
@@ -277,11 +347,17 @@ function matchesKeyword(entry, keyword) {
   const haystack = `${entry.title || ''} ${entry.summary || ''}`.toLowerCase();
   const terms = keyword.keyword.toLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return true;
-  return terms.some((term) => haystack.includes(term));
+  if (terms.some((term) => haystack.includes(term))) return true;
+  return {
+    ai_business: /\bai\b|artificial intelligence|llm|agent|model|openai|anthropic/i,
+    startup: /startup|founder|venture|funding|saas|small business/i,
+  }[keyword.category]?.test(haystack) || false;
 }
 
 async function maybeEnrichWithJina(result) {
   if (!jinaEnrich && result.summary) return result;
+  if (jinaPageCache.has(result.url)) return jinaPageCache.get(result.url);
+  const pending = (async () => {
   try {
     const res = await fetchWithTimeout(`https://r.jina.ai/${result.url}`, timeoutMs);
     if (!res.ok) return result;
@@ -294,6 +370,9 @@ async function maybeEnrichWithJina(result) {
   } catch {
     return result;
   }
+  })();
+  jinaPageCache.set(result.url, pending);
+  return pending;
 }
 
 function parseExaText(text) {
@@ -535,13 +614,16 @@ async function createEventCluster(row) {
 async function refreshEventCluster(clusterId) {
   const qs = new URLSearchParams({
     event_cluster_id: `eq.${clusterId}`,
-    select: 'title,source_type,quality_score,published_at,collected_at',
+    select: 'title,source_domain,source_type,quality_score,published_at,collected_at',
     order: 'quality_score.desc',
     limit: '1000',
   });
   const articles = await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/raw_articles?${qs.toString()}`);
   if (!articles.length) return;
   const officialCount = articles.filter((article) => article.source_type === 'official').length;
+  const independentSourceCount = new Set(
+    articles.map((article) => article.source_domain).filter(Boolean)
+  ).size;
   const timestamps = articles.map((article) => article.collected_at).filter(Boolean).sort();
   const eventDates = articles.map((article) => eventDate(article.published_at || article.collected_at)).filter(Boolean).sort();
   const ready = articles.length >= 2 && (officialCount > 0 || Number(articles[0].quality_score) >= 70);
@@ -555,6 +637,7 @@ async function refreshEventCluster(clusterId) {
       last_seen_at: timestamps[timestamps.length - 1],
       article_count: articles.length,
       official_source_count: officialCount,
+      independent_source_count: independentSourceCount,
       status: ready ? 'ready' : 'developing',
     }),
   });
@@ -656,6 +739,19 @@ function buildSearchQuery(keyword) {
     policy: 'Korea government support program SME startup policy latest',
   }[keyword.category] || 'latest news';
   return `${keyword.keyword} ${context}`.trim();
+}
+
+function buildRedditSearchQuery(keyword) {
+  const context = {
+    ai_business: 'AI agent automation business',
+    startup: 'startup side hustle business',
+    policy: 'small business funding government support',
+  }[keyword.category] || 'business';
+  return `${keyword.keyword} ${context}`.trim();
+}
+
+function redditUserAgent() {
+  return process.env.REDDIT_USER_AGENT || 'script:coa-newsweaver:v1.0 (by /u/lycian57)';
 }
 
 function buildOfficialSearchQuery(keyword) {
@@ -887,6 +983,7 @@ function requiredEnv(name) {
 }
 
 module.exports = {
+  buildRedditSearchQuery,
   buildOfficialSearchQuery,
   classifySource,
   dateDistanceDays,

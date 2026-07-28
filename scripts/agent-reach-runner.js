@@ -90,6 +90,7 @@ function buildCollectorArgs(body) {
     'official-results',
     'youtube-results',
     'github-results',
+    'reddit-results',
     'rss-results',
     'timeout-ms',
     'jina-enrich',
