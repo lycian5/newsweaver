@@ -15,6 +15,8 @@ assert.match(api, /start_review/);
 assert.match(api, /status\(409\)/);
 assert.match(api, /validateBriefForPreparation/);
 assert.match(api, /action === 'prepare'/);
+assert.match(api, /fetchBriefClusters/);
+assert.match(api, /isMissingBriefMetadata/);
 
 assert.match(page, /브리프 선별 큐/);
 assert.match(page, /검증 후 기사 초안 준비/);

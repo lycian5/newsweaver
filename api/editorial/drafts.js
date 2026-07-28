@@ -84,21 +84,7 @@ async function listKeywords(req, res) {
 async function listBriefs(req, res) {
   const supabase = getSupabase();
   const limit = clamp(req.query?.limit, 1, 100, 100);
-  let query = supabase
-    .from('event_clusters')
-    .select('id,category,representative_title,event_date,first_seen_at,last_seen_at,article_count,official_source_count,independent_source_count,editorial_state,prepared_draft_id,status')
-    .order('last_seen_at', { ascending: false })
-    .limit(limit);
-  if (req.query?.category) query = query.eq('category', req.query.category);
-  if (req.query?.status) query = query.eq('status', req.query.status);
-  if (req.query?.editorialState) query = query.eq('editorial_state', req.query.editorialState);
-  if (req.query?.freshness && req.query.freshness !== 'all') {
-    const hours = { '24h': 24, '7d': 168, '30d': 720 }[req.query.freshness];
-    if (hours) query = query.gte('last_seen_at', new Date(Date.now() - hours * 3600000).toISOString());
-  }
-  if (req.query?.search) query = query.ilike('representative_title', `%${String(req.query.search).slice(0, 100)}%`);
-  const { data: clusters, error } = await query;
-  if (error) throw error;
+  const clusters = await fetchBriefClusters(supabase, req, limit);
   const ids = (clusters || []).map((item) => item.id);
   if (!ids.length) return res.status(200).json({ briefs: [], metrics: emptyBriefMetrics(), collection: collectionHealth([]) });
   const [{ data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
@@ -129,19 +115,20 @@ async function getBrief(req, res) {
   if (clusterError) throw clusterError;
   if (articleError) throw articleError;
   if (factError) throw factError;
+  const normalizedCluster = normalizeBriefCluster(cluster);
   const sortedArticles = sortEvidence(articles || []);
-  const validation = validateBriefForPreparation(cluster, sortedArticles, facts || []);
+  const validation = validateBriefForPreparation(normalizedCluster, sortedArticles, facts || []);
   res.status(200).json({
     brief: {
-      ...cluster,
+      ...normalizedCluster,
       independent_source_count: independentSourceCount(sortedArticles),
       articles: sortedArticles,
       facts: facts || [],
       validation,
       history: [
-        { type: 'collected', at: cluster.first_seen_at, label: '최초 수집' },
-        { type: 'updated', at: cluster.last_seen_at, label: '최근 근거 갱신' },
-        ...(cluster.editorial_state === 'prepared' && cluster.prepared_draft_id
+        { type: 'collected', at: normalizedCluster.first_seen_at, label: '최초 수집' },
+        { type: 'updated', at: normalizedCluster.last_seen_at, label: '최근 근거 갱신' },
+        ...(normalizedCluster.editorial_state === 'prepared' && normalizedCluster.prepared_draft_id
           ? [{ type: 'prepared', at: null, label: '기사 초안으로 전환' }]
           : []),
       ],
@@ -158,6 +145,9 @@ async function updateBriefState(req, res) {
     .select('id,status,editorial_state,prepared_draft_id')
     .eq('id', clusterId)
     .single();
+  if (isMissingBriefMetadata(readError)) {
+    return res.status(409).json({ error: '리서치 브리프 데이터베이스 마이그레이션 적용이 필요합니다.' });
+  }
   if (readError) throw readError;
   const transitions = {
     start_review: { from: ['unreviewed'], updates: { editorial_state: 'reviewing' } },
@@ -201,6 +191,9 @@ async function prepareArticleDraft(req, res) {
   if (clusterError) throw clusterError;
   if (articleError) throw articleError;
   if (factError) throw factError;
+  if (!hasBriefWorkflowColumns(cluster)) {
+    return res.status(409).json({ error: '리서치 브리프 데이터베이스 마이그레이션 적용이 필요합니다.' });
+  }
   if (cluster.editorial_state === 'prepared' && cluster.prepared_draft_id) {
     return res.status(409).json({ error: '이미 기사 초안으로 전환된 브리프입니다.', draftId: cluster.prepared_draft_id });
   }
@@ -246,6 +239,53 @@ async function prepareArticleDraft(req, res) {
       validation,
     },
   });
+}
+
+async function fetchBriefClusters(supabase, req, limit) {
+  let legacy = false;
+  let { data: clusters, error } = await briefClusterQuery(supabase, req, limit, legacy);
+  if (isMissingBriefMetadata(error)) {
+    legacy = true;
+    ({ data: clusters, error } = await briefClusterQuery(supabase, req, limit, legacy));
+  }
+  if (error) throw error;
+  const normalized = (clusters || []).map(normalizeBriefCluster);
+  if (legacy && req.query?.editorialState && req.query.editorialState !== 'unreviewed') return [];
+  return normalized;
+}
+
+function briefClusterQuery(supabase, req, limit, legacy) {
+  const columns = legacy
+    ? 'id,category,representative_title,event_date,first_seen_at,last_seen_at,article_count,official_source_count,status'
+    : 'id,category,representative_title,event_date,first_seen_at,last_seen_at,article_count,official_source_count,independent_source_count,editorial_state,prepared_draft_id,status';
+  let query = supabase.from('event_clusters').select(columns).order('last_seen_at', { ascending: false }).limit(limit);
+  if (req.query?.category) query = query.eq('category', req.query.category);
+  if (req.query?.status) query = query.eq('status', req.query.status);
+  if (!legacy && req.query?.editorialState) query = query.eq('editorial_state', req.query.editorialState);
+  if (req.query?.freshness && req.query.freshness !== 'all') {
+    const hours = { '24h': 24, '7d': 168, '30d': 720 }[req.query.freshness];
+    if (hours) query = query.gte('last_seen_at', new Date(Date.now() - hours * 3600000).toISOString());
+  }
+  if (req.query?.search) query = query.ilike('representative_title', `%${String(req.query.search).slice(0, 100)}%`);
+  return query;
+}
+
+function normalizeBriefCluster(cluster) {
+  return {
+    ...cluster,
+    independent_source_count: Number(cluster?.independent_source_count || 0),
+    editorial_state: cluster?.editorial_state || 'unreviewed',
+    prepared_draft_id: cluster?.prepared_draft_id || null,
+  };
+}
+
+function isMissingBriefMetadata(error) {
+  return error?.code === '42703' && /independent_source_count|editorial_state|prepared_draft_id/.test(error.message || '');
+}
+
+function hasBriefWorkflowColumns(cluster) {
+  return Object.prototype.hasOwnProperty.call(cluster || {}, 'editorial_state')
+    && Object.prototype.hasOwnProperty.call(cluster || {}, 'prepared_draft_id');
 }
 
 async function updateDraft(req, res) {
