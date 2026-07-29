@@ -327,22 +327,26 @@ function validateBriefForPreparation(cluster, articles, facts) {
   const warnings = [];
   const independentSources = independentSourceCount(articles);
   const factTypes = new Set((facts || []).map((fact) => fact.fact_type));
+  const isPolicyBrief = cluster?.category === 'policy';
   const isFresh = isWithinHours(cluster?.last_seen_at, 24);
   if (!cluster?.representative_title?.trim()) blockers.push('대표 제목이 없어 기사 초안을 준비할 수 없습니다.');
   if (!articles?.length) blockers.push('근거 기사가 없어 기사 초안을 준비할 수 없습니다.');
   if (articles?.length && !articles.some((article) => article.url)) blockers.push('사용 가능한 근거 기사 URL이 없습니다.');
   const hasVerifiedSource = articles?.some((article) => article.verification_status === 'verified');
   const hasOfficialSource = Number(cluster?.official_source_count || 0) > 0 || articles?.some((article) => article.source_type === 'official');
+  const hasPolicyDate = Boolean(cluster?.event_date) || articles?.some((article) => article.published_at);
   if (!hasVerifiedSource && !hasOfficialSource) blockers.push('공식 또는 검증된 출처가 한 건 이상 필요합니다.');
-  if (independentSources < 2) blockers.push('독립 발행처가 두 곳 이상 필요합니다.');
-  if (cluster?.status !== 'ready') warnings.push('리서치 브리프 상태가 작성 가능(ready)이 아닙니다.');
-  if (!facts?.length) warnings.push('구조화된 확인 사실이 없습니다. 원문에서 날짜·기관·수치를 다시 확인하세요.');
-  if (!factTypes.has('date') || !factTypes.has('organization') || !factTypes.has('number')) warnings.push('날짜·기관·수치 사실이 모두 확보되지 않았습니다.');
+  if (!isPolicyBrief && independentSources < 2) blockers.push('독립 발행처가 두 곳 이상 필요합니다.');
+  if (isPolicyBrief && !hasPolicyDate) blockers.push('정책·지원사업은 공식 원문의 발행일 또는 공고일이 필요합니다.');
+  if (!facts?.length && !isPolicyBrief) warnings.push('구조화된 확인 사실이 없습니다. 원문에서 날짜·기관·수치를 다시 확인하세요.');
+  if (isPolicyBrief && !factTypes.has('date') && !factTypes.has('organization')) warnings.push('정책·지원사업의 날짜·기관은 공식 원문에서 확인하세요.');
+  if (!isPolicyBrief && (!factTypes.has('date') || !factTypes.has('organization') || !factTypes.has('number'))) warnings.push('날짜·기관·수치 사실이 모두 확보되지 않았습니다.');
   if (!hasOfficialSource) warnings.push('공식 출처가 없습니다. 인용 범위와 사실관계를 추가 검토하세요.');
   if (!isFresh) warnings.push('최근 24시간 안에 근거가 갱신되지 않았습니다. 최신성을 다시 확인하세요.');
   return {
     ready: blockers.length === 0,
     checked_at: new Date().toISOString(),
+    is_policy: isPolicyBrief,
     blockers,
     warnings,
     checks: {
@@ -352,7 +356,9 @@ function validateBriefForPreparation(cluster, articles, facts) {
       verified_source: Boolean(hasVerifiedSource || hasOfficialSource),
       structured_facts: Boolean(facts?.length),
       independent_sources: independentSources >= 2,
-      key_facts: factTypes.has('date') && factTypes.has('organization') && factTypes.has('number'),
+      key_facts: isPolicyBrief
+        ? hasPolicyDate && hasOfficialSource
+        : factTypes.has('date') && factTypes.has('organization') && factTypes.has('number'),
       fresh: isFresh,
     },
   };
