@@ -83,6 +83,17 @@
     .checklist li.ok::before { background:var(--good); }
     .checklist li.warn::before { background:#f59e0b; }
     .notice { background:#fffbeb; border:1px solid #fde68a; color:#854d0e; border-radius:5px; padding:11px; font-size:11px; line-height:1.55; }
+    .ai-panel { background:#f0f9ff; border-color:#bae6fd; }
+    .ai-panel .section-head h2 { color:#075985; }
+    .ai-status { margin-top:12px; border:1px solid #cbd5e1; border-radius:5px; padding:10px; color:#475569; font-size:12px; line-height:1.55; }
+    .ai-status.error { border-color:#fecaca; color:#991b1b; background:#fff7f7; }
+    .ai-proposal { margin-top:12px; border:1px solid #7dd3fc; border-radius:5px; padding:12px; background:#fff; font-size:12px; line-height:1.55; }
+    .ai-checks { list-style:none; margin:9px 0 0; padding:0; display:grid; gap:5px; }
+    .ai-checks li { display:flex; gap:7px; align-items:flex-start; }
+    .ai-checks li::before { content:""; width:7px; height:7px; border-radius:50%; margin-top:5px; background:#94a3b8; flex:0 0 auto; }
+    .ai-checks li.pass::before { background:var(--good); }
+    .ai-checks li.warning::before { background:#f59e0b; }
+    .ai-checks li.block::before { background:var(--danger); }
     .copy-row { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
     .toast { position:fixed; right:20px; bottom:20px; z-index:50; max-width:360px; padding:11px 14px; border-radius:5px; background:#17202a; color:#fff; box-shadow:0 8px 30px rgba(0,0,0,.22); opacity:0; transform:translateY(8px); pointer-events:none; transition:.18s; }
     .toast.show { opacity:1; transform:translateY(0); }
@@ -113,6 +124,28 @@
 
   <main class="layout">
     <form class="workspace" id="draftForm" novalidate>
+      <section class="section ai-panel">
+        <div class="section-head"><h2>AI 작성 도구</h2><span>근거 자료만 사용한 제안이며 적용 전에는 기존 초안을 바꾸지 않습니다.</span></div>
+        <div class="grid grid-3">
+          <div class="field"><label for="aiTone">문체</label><select id="aiTone"><option value="neutral">사실 중심</option><option value="explanatory">쉽게 설명</option><option value="brief">간결한 브리핑</option></select></div>
+          <div class="field"><label for="aiLength">분량</label><select id="aiLength"><option value="standard">표준</option><option value="short">짧게</option><option value="long">상세하게</option></select></div>
+          <div class="field"><label for="aiInstructions">편집 지시</label><input id="aiInstructions" type="text" maxlength="1200" placeholder="예: 지원 대상과 신청 기한을 먼저 설명" /></div>
+        </div>
+        <div class="actions" style="margin-top:12px;">
+          <button class="btn btn-primary" type="button" id="aiFullButton">AI 전체 초안 작성</button>
+          <button class="btn btn-outline" type="button" id="aiHeadlineButton">제목·부제 작성</button>
+          <button class="btn btn-outline" type="button" id="aiBodyButton">본문 작성</button>
+          <button class="btn btn-outline" type="button" id="aiPolishButton">문장 다듬기</button>
+          <button class="btn btn-outline" type="button" id="aiVerifyButton">사실·출처 점검</button>
+        </div>
+        <div class="ai-status" id="aiStatus">AI 작성은 수집된 근거와 현재 초안을 바탕으로 제안을 만듭니다.</div>
+        <div class="ai-proposal" id="aiProposal" hidden>
+          <strong id="aiProposalTitle">AI 제안</strong>
+          <div id="aiProposalSummary" style="margin-top:6px;"></div>
+          <ul class="ai-checks" id="aiChecks"></ul>
+          <div class="actions" style="margin-top:10px;"><button class="btn btn-good" type="button" id="applyAiProposalButton">제안 적용</button><button class="btn btn-outline" type="button" id="discardAiProposalButton">제안 닫기</button></div>
+        </div>
+      </section>
       <section class="section">
         <div class="section-head"><h2>기사 분류</h2><span>실제 내부 ID는 플랫폼 업체와 최종 확인 필요</span></div>
         <div class="source-strip" id="seedInfo" hidden></div>
@@ -178,6 +211,7 @@
               <label for="thumbnailInput">이미지 파일</label>
               <input id="thumbnailInput" type="file" accept="image/jpeg,image/png" />
             </div>
+            <div class="actions" style="margin-top:10px;"><button class="btn btn-outline" type="button" id="generateImageButton">AI 대표 이미지 생성</button></div>
             <div class="grid grid-2" style="margin-top:12px;">
               <div class="field">
                 <label for="imageMode">맞춤 방식</label>
@@ -307,9 +341,12 @@
       'category','additionalCategory1','additionalCategory2','reporterEmail','scheduledAt','title',
       'subtitle1','subtitle2','subtitle3','bodyHtml','thumbnailAlt','thumbnailCaption','thumbnailSource',
       'tags','sourceUrl','commentsEnabled','showOnMain','showAsHeadline','articleAd','shareNews','shareConsent',
-      'imageMode','imageBackground','editorialNotes'
+      'imageMode','imageBackground','editorialNotes','aiTone','aiLength','aiInstructions'
     ];
     let sourceImage = null;
+    let latestImageAsset = null;
+    let latestAiProposal = null;
+    let latestAiScope = null;
     let toastTimer = null;
     let currentDraftId = null;
     let currentDraftStatus = 'draft';
@@ -348,7 +385,7 @@
         title:'', subtitle1:'', subtitle2:'', subtitle3:'', bodyHtml:'', thumbnailAlt:'', thumbnailCaption:'',
         thumbnailSource:'', tags:'', sourceUrl:'', commentsEnabled:false, showOnMain:false, showAsHeadline:false,
         articleAd:false, shareNews:false, shareConsent:false, imageMode:'cover', imageBackground:'#ffffff',
-        editorialNotes:''
+        editorialNotes:'', aiTone:'neutral', aiLength:'standard', aiInstructions:''
       };
     }
 
@@ -528,6 +565,17 @@
       img.src = URL.createObjectURL(file);
     }
 
+    async function loadImageFromUrl(url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('image download failed');
+        const blob = await response.blob();
+        await loadImage(new File([blob], 'ai-thumbnail.jpg', { type: blob.type || 'image/jpeg' }));
+      } catch (_) {
+        showToast('저장된 대표 이미지를 불러오지 못했습니다.', true);
+      }
+    }
+
     function clearCanvas() {
       const canvas = $('thumbnailCanvas');
       const ctx = canvas.getContext('2d');
@@ -691,6 +739,13 @@
       $('bodyHtml').value = draft.body_html || '';
       $('tags').value = (draft.tags || []).join(', ');
       $('editorialNotes').value = draft.editorial_notes || '';
+      latestImageAsset = draft.image_asset || null;
+      if (draft.image_asset?.url) {
+        $('thumbnailAlt').value = draft.image_asset.alt_text || $('thumbnailAlt').value;
+        $('thumbnailCaption').value = draft.image_asset.caption || $('thumbnailCaption').value;
+        $('thumbnailSource').value = draft.image_asset.source || $('thumbnailSource').value;
+        await loadImageFromUrl(draft.image_asset.url);
+      }
       localStorage.setItem(WORKFLOW_KEY, JSON.stringify({draftId:currentDraftId,status:currentDraftStatus}));
       updateWorkflowUI();
       saveForm();
@@ -706,7 +761,119 @@
         bodyHtml:getBodyHtml(),
         tags:$('tags').value.split(',').map(value => value.trim()).filter(Boolean),
         editorialNotes:$('editorialNotes').value.trim(),
+        thumbnailAlt:$('thumbnailAlt').value.trim(),
+        thumbnailCaption:$('thumbnailCaption').value.trim(),
+        thumbnailSource:$('thumbnailSource').value.trim(),
       };
+    }
+
+    function aiSnapshot() {
+      return {
+        title:$('title').value.trim(),
+        subtitle:[$('subtitle1').value,$('subtitle2').value,$('subtitle3').value].map(value => value.trim()).filter(Boolean).join('\n'),
+        bodyHtml:getBodyHtml(),
+        tags:$('tags').value.split(',').map(value => value.trim()).filter(Boolean),
+      };
+    }
+
+    function setAiStatus(message, error = false) {
+      $('aiStatus').textContent = message;
+      $('aiStatus').className = `ai-status${error ? ' error' : ''}`;
+    }
+
+    function renderAiChecks(review) {
+      const checks = review?.checks || [];
+      $('aiChecks').innerHTML = checks.map(check => `<li class="${escapeHtml(check.status || '')}"><span><strong>${escapeHtml(check.label || '')}</strong> ${escapeHtml(check.detail || '')}</span></li>`).join('');
+    }
+
+    async function requestAiProposal(scope) {
+      if (!currentDraftId) { showToast('리서치 브리프에서 기사 초안을 먼저 준비하세요.', true); return; }
+      if (!['draft','rejected'].includes(currentDraftStatus)) { showToast('검토 대기 또는 승인된 초안은 AI로 수정할 수 없습니다.', true); return; }
+      latestAiProposal = null;
+      latestAiScope = scope;
+      $('aiProposal').hidden = true;
+      setAiStatus('AI 제안을 생성 중입니다. 근거 범위를 벗어난 내용은 제외합니다.');
+      try {
+        const result = await api('POST', {
+          action:'ai_generate', id:currentDraftId, scope,
+          tone:$('aiTone').value, length:$('aiLength').value, instructions:$('aiInstructions').value.trim(), draft:aiSnapshot(),
+        });
+        latestAiProposal = result.proposal;
+        $('applyAiProposalButton').hidden = false;
+        $('aiProposalTitle').textContent = `${scope === 'full' ? '전체 초안' : scope === 'headline' ? '제목·부제' : scope === 'body' ? '본문' : '다듬기'} AI 제안`;
+        $('aiProposalSummary').textContent = result.proposal.summary || result.proposal.title || '생성된 제안입니다.';
+        renderAiChecks(result.review);
+        $('aiProposal').hidden = false;
+        setAiStatus(`${result.model}으로 제안을 만들었습니다. 내용을 확인한 뒤 적용하세요.`);
+      } catch (error) {
+        setAiStatus(error.message, true);
+        showToast(error.message, true);
+      }
+    }
+
+    async function verifyAiEvidence() {
+      if (!currentDraftId) { showToast('리서치 브리프에서 기사 초안을 먼저 준비하세요.', true); return; }
+      setAiStatus('본문과 수집 근거 URL을 점검 중입니다.');
+      try {
+        const result = await api('POST', { action:'ai_verify', id:currentDraftId, draft:aiSnapshot() });
+        latestAiProposal = null;
+        renderAiChecks(result.review);
+        $('aiProposalTitle').textContent = result.review.ready ? '사실·출처 점검 통과' : '사실·출처 점검 필요';
+        $('aiProposalSummary').textContent = result.review.ready ? '현재 본문의 URL은 수집된 근거 범위 안에 있습니다.' : '차단 또는 주의 항목을 확인한 뒤 본문을 수정하세요.';
+        $('applyAiProposalButton').hidden = true;
+        $('aiProposal').hidden = false;
+        setAiStatus(result.review.ready ? '점검을 마쳤습니다.' : '점검 항목을 확인하세요.', !result.review.ready);
+      } catch (error) {
+        setAiStatus(error.message, true);
+        showToast(error.message, true);
+      }
+    }
+
+    function applyAiProposal() {
+      const proposal = latestAiProposal;
+      if (!proposal) return;
+      const scope = latestAiScope;
+      if (scope === 'full' || scope === 'headline') {
+        $('title').value = proposal.title || $('title').value;
+        ['subtitle1','subtitle2','subtitle3'].forEach((id, index) => { $(id).value = proposal.subtitles?.[index] || ''; });
+      }
+      if (scope === 'full' || scope === 'body' || scope === 'polish') $('bodyHtml').value = proposal.body_html || $('bodyHtml').value;
+      if (scope === 'full') {
+        if (proposal.tags?.length) $('tags').value = proposal.tags.join(', ');
+        if (proposal.source_url) $('sourceUrl').value = proposal.source_url;
+        if (proposal.thumbnail_alt) $('thumbnailAlt').value = proposal.thumbnail_alt;
+        if (proposal.thumbnail_caption) $('thumbnailCaption').value = proposal.thumbnail_caption;
+        const category = CATEGORY_DEFAULTS[proposal.category_recommendation];
+        if (category) $('category').value = category;
+      }
+      latestAiProposal = null;
+      $('aiProposal').hidden = true;
+      $('applyAiProposalButton').hidden = false;
+      saveForm();
+      showToast('AI 제안을 초안에 적용했습니다. 저장 후 검토 요청하세요.');
+    }
+
+    async function generateAiImage() {
+      if (!currentDraftId) { showToast('리서치 브리프에서 기사 초안을 먼저 준비하세요.', true); return; }
+      if (!['draft','rejected'].includes(currentDraftStatus)) { showToast('검토 대기 또는 승인된 초안은 AI 이미지를 생성할 수 없습니다.', true); return; }
+      const prompt = latestAiProposal?.image_prompt || '';
+      setAiStatus('AI 대표 이미지를 생성하고 안전한 저장소에 보관 중입니다.');
+      try {
+        const result = await api('POST', {
+          action:'ai_generate_image', id:currentDraftId, prompt, draft:aiSnapshot(),
+          thumbnailAlt:$('thumbnailAlt').value.trim(), thumbnailCaption:$('thumbnailCaption').value.trim(),
+        });
+        latestImageAsset = result.asset;
+        if (result.asset.alt_text) $('thumbnailAlt').value = result.asset.alt_text;
+        if (result.asset.caption) $('thumbnailCaption').value = result.asset.caption;
+        $('thumbnailSource').value = 'AI generated';
+        await loadImageFromUrl(result.asset.url);
+        saveForm();
+        setAiStatus('AI 대표 이미지를 생성했습니다. 출처 표기와 설명을 확인하세요.');
+      } catch (error) {
+        setAiStatus(error.message, true);
+        showToast(error.message, true);
+      }
     }
 
     async function saveServerDraft(silent = false) {
@@ -772,6 +939,7 @@
         }
       });
       $('thumbnailInput').disabled = !editable;
+      ['aiFullButton','aiHeadlineButton','aiBodyButton','aiPolishButton','aiVerifyButton','generateImageButton','applyAiProposalButton'].forEach(id => { $(id).disabled = !editable || !currentDraftId; });
       $('saveDraftButton').disabled = !editable || !currentDraftId;
       $('submitDraftButton').disabled = !editable || !currentDraftId;
       $('approveDraftButton').disabled = !pending;
@@ -856,6 +1024,14 @@
       $('draftForm').addEventListener('input', saveForm);
       $('draftForm').addEventListener('change', saveForm);
       $('thumbnailInput').onchange = event => loadImage(event.target.files?.[0]);
+      $('aiFullButton').onclick = () => requestAiProposal('full');
+      $('aiHeadlineButton').onclick = () => requestAiProposal('headline');
+      $('aiBodyButton').onclick = () => requestAiProposal('body');
+      $('aiPolishButton').onclick = () => requestAiProposal('polish');
+      $('aiVerifyButton').onclick = verifyAiEvidence;
+      $('generateImageButton').onclick = generateAiImage;
+      $('applyAiProposalButton').onclick = applyAiProposal;
+      $('discardAiProposalButton').onclick = () => { latestAiProposal = null; $('aiProposal').hidden = true; $('applyAiProposalButton').hidden = false; };
       $('imageMode').onchange = drawThumbnail;
       $('imageBackground').onchange = drawThumbnail;
       $('previewButton').onclick = previewBody;

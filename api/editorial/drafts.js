@@ -1,4 +1,13 @@
 const { getSupabase } = require('../../lib/supabase');
+const { getOpenAI } = require('../../lib/openai');
+const { resolveOpenAIImageModel, resolveOpenAIModel } = require('../../lib/openaiModels');
+const {
+  buildEvidence,
+  buildImagePrompt,
+  generateEditorialArticle,
+  reviewDraftEvidence,
+  sanitizeArticleHtml,
+} = require('../../lib/editorialAi');
 const {
   assertCronAuth,
   clearDashboardSessionCookie,
@@ -22,6 +31,9 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && req.query?.view === 'keywords') return listKeywords(req, res);
     if (req.method === 'GET') return listDrafts(req, res);
     if (req.method === 'POST' && req.body?.action === 'prepare') return prepareArticleDraft(req, res);
+    if (req.method === 'POST' && req.body?.action === 'ai_generate') return generateDraftWithAi(req, res);
+    if (req.method === 'POST' && req.body?.action === 'ai_verify') return verifyDraftEvidence(req, res);
+    if (req.method === 'POST' && req.body?.action === 'ai_generate_image') return generateDraftImage(req, res);
     if (req.method === 'POST' && ['start_review', 'hold', 'resume', 'archive'].includes(req.body?.action)) return updateBriefState(req, res);
     if (req.method === 'PATCH') return updateDraft(req, res);
     res.status(405).json({ error: 'Method not allowed' });
@@ -176,7 +188,7 @@ async function listDrafts(req, res) {
   if (req.query?.status) query = query.eq('status', req.query.status);
   const { data, error } = await query;
   if (error) throw error;
-  res.status(200).json({ drafts: data || [] });
+  res.status(200).json({ drafts: await attachDraftAssets(supabase, data || []) });
 }
 
 async function prepareArticleDraft(req, res) {
@@ -319,7 +331,176 @@ async function updateDraft(req, res) {
   }
   const { data, error } = await supabase.from('editorial_drafts').update(updates).eq('id', id).select().single();
   if (error) throw error;
+  if (action === 'save' && current.latest_image_asset_id) {
+    const imageUpdates = {};
+    if (typeof req.body?.thumbnailAlt === 'string') imageUpdates.alt_text = req.body.thumbnailAlt.trim().slice(0, 300) || null;
+    if (typeof req.body?.thumbnailCaption === 'string') imageUpdates.caption = req.body.thumbnailCaption.trim().slice(0, 300) || null;
+    if (typeof req.body?.thumbnailSource === 'string') imageUpdates.source = req.body.thumbnailSource.trim().slice(0, 300) || null;
+    if (Object.keys(imageUpdates).length) {
+      const { error: assetError } = await supabase.from('editorial_assets').update(imageUpdates).eq('id', current.latest_image_asset_id);
+      if (assetError) throw assetError;
+    }
+  }
   res.status(200).json({ draft: data });
+}
+
+async function generateDraftWithAi(req, res) {
+  const id = Number.parseInt(req.body?.id, 10);
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  const supabase = getSupabase();
+  const schemaError = await ensureAiSchema(supabase);
+  if (schemaError) return res.status(409).json({ error: 'AI 초안 데이터베이스 마이그레이션 적용이 필요합니다.' });
+  const { draft, cluster, articles, facts } = await loadDraftAiContext(supabase, id);
+  if (!['draft', 'rejected'].includes(draft.status)) return res.status(409).json({ error: '검토 대기 또는 승인된 초안은 AI로 수정할 수 없습니다.' });
+  const validation = validateBriefForPreparation(cluster, articles, facts);
+  if (!validation.ready) return res.status(409).json({ error: validation.blockers[0], validation });
+
+  const currentDraft = requestedDraftSnapshot(req.body?.draft, draft);
+  const context = buildEvidence(cluster, articles, facts);
+  const model = resolveOpenAIModel('draft', req.body?.model);
+  const proposal = await generateEditorialArticle(getOpenAI(), model, context, {
+    scope: req.body?.scope,
+    tone: req.body?.tone,
+    length: req.body?.length,
+    instructions: req.body?.instructions,
+    currentDraft,
+  });
+  const review = reviewDraftEvidence(proposal, context.urls);
+  const prompt = String(req.body?.instructions || '').trim().slice(0, 1200);
+  const { error } = await supabase.from('editorial_draft_versions').insert({
+    draft_id: id,
+    action: `ai_${String(req.body?.scope || 'full').slice(0, 40)}`,
+    title: proposal.title || draft.title,
+    subtitle: proposal.subtitles.join('\n'),
+    summary: proposal.summary,
+    body_html: proposal.body_html || draft.body_html,
+    tags: proposal.tags,
+    model,
+    prompt,
+    validation: review,
+  });
+  if (error) throw error;
+  const { error: draftError } = await supabase.from('editorial_drafts').update({
+    ai_prompt: prompt || null,
+    ai_generated_at: new Date().toISOString(),
+    ai_generation_status: 'ready',
+    ai_generation_error: null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', id);
+  if (draftError) throw draftError;
+  return res.status(200).json({ proposal, model, validation, review });
+}
+
+async function verifyDraftEvidence(req, res) {
+  const id = Number.parseInt(req.body?.id, 10);
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  const supabase = getSupabase();
+  const { draft, cluster, articles, facts } = await loadDraftAiContext(supabase, id);
+  const context = buildEvidence(cluster, articles, facts);
+  const currentDraft = requestedDraftSnapshot(req.body?.draft, draft);
+  return res.status(200).json({
+    review: reviewDraftEvidence(currentDraft, context.urls),
+    validation: validateBriefForPreparation(cluster, articles, facts),
+  });
+}
+
+async function generateDraftImage(req, res) {
+  const id = Number.parseInt(req.body?.id, 10);
+  if (!id) return res.status(400).json({ error: 'id is required' });
+  const supabase = getSupabase();
+  const schemaError = await ensureAiSchema(supabase);
+  if (schemaError) return res.status(409).json({ error: 'AI 이미지 데이터베이스 마이그레이션 적용이 필요합니다.' });
+  const { draft } = await loadDraftAiContext(supabase, id);
+  if (!['draft', 'rejected'].includes(draft.status)) return res.status(409).json({ error: '검토 대기 또는 승인된 초안은 AI 이미지를 생성할 수 없습니다.' });
+  const model = resolveOpenAIImageModel(req.body?.model);
+  const prompt = buildImagePrompt({ ...draft, ...requestedDraftSnapshot(req.body?.draft, draft) }, req.body?.prompt);
+  await supabase.from('editorial_drafts').update({ ai_generation_status: 'generating', ai_generation_error: null }).eq('id', id);
+  try {
+    const image = await getOpenAI().images.generate({
+      model,
+      prompt,
+      size: '1536x1024',
+      quality: 'medium',
+      output_format: 'jpeg',
+    });
+    const base64 = image.data?.[0]?.b64_json;
+    if (!base64) throw new Error('AI image response did not include image data.');
+    const path = `draft-${id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.jpg`;
+    const { error: uploadError } = await supabase.storage.from('editorial-assets').upload(path, Buffer.from(base64, 'base64'), { contentType: 'image/jpeg', upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: asset, error: assetError } = await supabase.from('editorial_assets').insert({
+      draft_id: id,
+      kind: 'representative_image',
+      storage_path: path,
+      mime_type: 'image/jpeg',
+      width: 1536,
+      height: 1024,
+      alt_text: String(req.body?.thumbnailAlt || '').trim().slice(0, 300) || null,
+      caption: String(req.body?.thumbnailCaption || '').trim().slice(0, 300) || null,
+      source: 'AI generated',
+      prompt,
+      model,
+    }).select().single();
+    if (assetError) throw assetError;
+    const { error: updateError } = await supabase.from('editorial_drafts').update({
+      latest_image_asset_id: asset.id,
+      ai_prompt: prompt,
+      ai_generated_at: new Date().toISOString(),
+      ai_generation_status: 'ready',
+      ai_generation_error: null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', id);
+    if (updateError) throw updateError;
+    const { data: signed, error: signedError } = await supabase.storage.from('editorial-assets').createSignedUrl(path, 3600);
+    if (signedError) throw signedError;
+    return res.status(201).json({ asset: { ...asset, url: signed.signedUrl } });
+  } catch (err) {
+    await supabase.from('editorial_drafts').update({ ai_generation_status: 'failed', ai_generation_error: String(err.message || err).slice(0, 1000) }).eq('id', id);
+    throw err;
+  }
+}
+
+async function loadDraftAiContext(supabase, id) {
+  const { data: draft, error: draftError } = await supabase.from('editorial_drafts').select('*').eq('id', id).single();
+  if (draftError) throw draftError;
+  const [{ data: cluster, error: clusterError }, { data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
+    supabase.from('event_clusters').select('*').eq('id', draft.event_cluster_id).single(),
+    supabase.from('raw_articles').select('title,url,summary,published_at,source,source_domain,source_type,quality_score,verification_status').eq('event_cluster_id', draft.event_cluster_id).order('quality_score', { ascending: false }),
+    supabase.from('article_facts').select('fact_text,fact_type,source_url,is_official,confidence').eq('event_cluster_id', draft.event_cluster_id).order('confidence', { ascending: false }),
+  ]);
+  if (clusterError) throw clusterError;
+  if (articleError) throw articleError;
+  if (factError) throw factError;
+  return { draft, cluster, articles: articles || [], facts: facts || [] };
+}
+
+function requestedDraftSnapshot(input, draft) {
+  return {
+    title: String(input?.title ?? draft.title ?? '').slice(0, 500),
+    subtitle: String(input?.subtitle ?? draft.subtitle ?? '').slice(0, 1000),
+    summary: String(input?.summary ?? draft.summary ?? '').slice(0, 1800),
+    body_html: sanitizeArticleHtml(input?.bodyHtml ?? draft.body_html ?? ''),
+    tags: Array.isArray(input?.tags) ? input.tags.slice(0, 20) : (draft.tags || []),
+  };
+}
+
+async function ensureAiSchema(supabase) {
+  const { error } = await supabase.from('editorial_draft_versions').select('id').limit(1);
+  return error || null;
+}
+
+async function attachDraftAssets(supabase, drafts) {
+  const assetIds = drafts.map((draft) => draft.latest_image_asset_id).filter(Boolean);
+  if (!assetIds.length) return drafts;
+  const { data: assets, error } = await supabase.from('editorial_assets').select('*').in('id', assetIds);
+  if (error) return drafts;
+  const byId = new Map((assets || []).map((asset) => [asset.id, asset]));
+  return Promise.all(drafts.map(async (draft) => {
+    const asset = byId.get(draft.latest_image_asset_id);
+    if (!asset) return draft;
+    const { data } = await supabase.storage.from('editorial-assets').createSignedUrl(asset.storage_path, 3600);
+    return { ...draft, image_asset: { ...asset, url: data?.signedUrl || null } };
+  }));
 }
 
 function validateBriefForPreparation(cluster, articles, facts) {

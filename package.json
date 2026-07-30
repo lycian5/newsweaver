@@ -14,6 +14,7 @@
     "test:collection-schedule": "node tests/test_collection_schedule.js",
     "test:research-briefs": "node tests/test_research_briefs.js",
     "test:editorial-workflow": "node tests/test_editorial_workflow.js",
+    "test:editorial-ai": "node tests/test_editorial_ai.js",
     "test:ops-health": "node tests/test_ops_health.js",
     "test:dashboard-auth": "node tests/test_dashboard_auth.js",
     "collect:agent-reach": "node scripts/agent-reach-collect.js",
