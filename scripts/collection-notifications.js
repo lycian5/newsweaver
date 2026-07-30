@@ -2,22 +2,22 @@
 
 function formatCollectionNotification(result, request = {}) {
   const summary = result.summary || {};
-  const failed = !result.ok;
-  const trigger = request.trigger === 'schedule' ? 'automatic schedule' : 'manual run';
-  const failures = Array.isArray(summary.failures) ? summary.failures : [];
+  const successful = result.ok;
+  const trigger = request.trigger === 'schedule' ? '자동 수집' : '수동 실행';
   const lines = [
-    failed ? 'COA NEWS collection failed' : 'COA NEWS collection complete',
-    `Trigger: ${trigger}`,
-    `Keywords processed: ${summary.keywordsProcessed ?? 0}`,
-    `Unique materials: ${summary.rowsPrepared ?? 0}`,
-    `Clusters updated: ${summary.clustersAssigned ?? 0}`,
-    `Ready briefs: ${summary.readyBriefs ?? 0}`,
-    `Facts extracted: ${summary.factsExtracted ?? 0}`,
+    successful ? '✅ COA NEWS 수집 완료' : '⚠️ COA NEWS 수집 확인 필요',
+    `실행: ${trigger}`,
+    `완료: ${formatCompletedAt(result.completedAt)}`,
   ];
 
-  if (failures.length) lines.push(`Source failures: ${failures.length}`);
-  if (failed && result.stderr) lines.push(`Error: ${oneLine(result.stderr, 500)}`);
-  lines.push('Review briefs: https://newsweaver.vercel.app/research-briefs');
+  if (successful) {
+    const materials = summary.rowsUpserted ?? summary.rowsPrepared ?? 0;
+    lines.push(`수집: ${summary.keywordsProcessed ?? 0}개 키워드 · ${materials}건 자료`);
+    lines.push(`작성 가능 브리프: ${summary.readyBriefs ?? 0}건`);
+  } else {
+    lines.push('결과: 수집이 완료되지 않았습니다. 서버 로그를 확인하세요.');
+  }
+  lines.push('브리프 확인: https://newsweaver.vercel.app/research-briefs');
   return lines.join('\n');
 }
 
@@ -38,8 +38,18 @@ async function notifyCollectionResult(result, request = {}, options = {}) {
   return { sent: true };
 }
 
-function oneLine(value, limit) {
-  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, limit);
+function formatCompletedAt(value) {
+  const completedAt = value ? new Date(value) : new Date();
+  if (Number.isNaN(completedAt.getTime())) return '확인 필요';
+  return `${completedAt.toLocaleString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })} KST`;
 }
 
 module.exports = { formatCollectionNotification, notifyCollectionResult };

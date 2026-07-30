@@ -131,6 +131,7 @@ function runCollector(args) {
       resolve({
         ok: exitCode === 0,
         exitCode,
+        completedAt: new Date().toISOString(),
         args,
         summary,
         stdout: stdout.slice(-8000),

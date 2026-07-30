@@ -10,6 +10,7 @@ assert.match(source, /notifyCollectionResult/);
 assert.match(source, /Collection notification skipped/);
 assert.match(source, /isDryRun/);
 assert.match(source, /'reddit-results'/);
+assert.match(source, /completedAt: new Date\(\)\.toISOString\(\)/);
 const prepareNode = workflow.nodes.find((node) => node.id === 'prepare-runner');
 const callNode = workflow.nodes.find((node) => node.id === 'call-runner');
 const summaryNode = workflow.nodes.find((node) => node.id === 'format-summary');
