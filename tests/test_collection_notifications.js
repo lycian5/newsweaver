@@ -15,11 +15,12 @@ const result = {
 };
 
 const text = formatCollectionNotification(result, { trigger: 'schedule' });
-assert.match(text, /✅ COA NEWS 수집 완료/);
+assert.match(text, /✅ COA NEWS 수집 실행 성공/);
 assert.match(text, /실행: 자동 수집/);
 assert.match(text, /완료:/);
 assert.match(text, /수집: 54개 키워드 · 120건 자료/);
-assert.match(text, /작성 가능 브리프: 12건/);
+assert.match(text, /브리프 반영: 있음 · 작성 가능 12건/);
+assert.match(text, /freshness=7d&editorialState=unreviewed&sort=attention/);
 assert.doesNotMatch(text, /Clusters updated|Facts extracted|Source failures|Error:/);
 
 const failedText = formatCollectionNotification({
@@ -42,7 +43,7 @@ assert.doesNotMatch(failedText, /sensitive database error detail|Keywords proces
     },
   });
   assert.equal(response.sent, true);
-  assert.match(sent.text, /작성 가능 브리프: 12건/);
+  assert.match(sent.text, /브리프 반영: 있음 · 작성 가능 12건/);
   const skipped = await notifyCollectionResult(result, {}, { enabled: false });
   assert.deepEqual(skipped, { sent: false, reason: 'disabled' });
   process.stdout.write('Collection notification checks passed.\n');
