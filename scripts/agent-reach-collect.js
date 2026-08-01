@@ -245,7 +245,7 @@ function recordExaCost(cost) {
 }
 
 function loadExaUsage() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = koreaDate();
   const month = today.slice(0, 7);
   if (!exaUsageState) {
     try {
@@ -265,6 +265,10 @@ function loadExaUsage() {
   exaUsageState.dailyRequests = Number(exaUsageState.dailyRequests) || 0;
   exaUsageState.monthlySpendUsd = Number(exaUsageState.monthlySpendUsd) || 0;
   return exaUsageState;
+}
+
+function koreaDate() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 function saveExaUsage(usage) {
