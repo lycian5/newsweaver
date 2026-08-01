@@ -4,7 +4,7 @@ const { searchNews } = require('../../lib/naver');
 const { searchGoogleNews } = require('../../lib/googleNews');
 const { fetchPolicyNotices } = require('../../lib/policySources');
 const { fetchPublicDataNotices, getServiceKey } = require('../../lib/publicDataSources');
-const { selectHybridKeywords } = require('../../scripts/keyword-selection');
+const { selectCollectionKeywords } = require('../../scripts/keyword-selection');
 
 function stripHtml(str) {
   return String(str || '')
@@ -51,12 +51,24 @@ module.exports = async (req, res) => {
 
   let articlesUpserted = 0;
   let keywordFailures = 0;
-  const selectedKeywords = selectHybridKeywords(keywords || [], {
+  const { data: recentArticles, error: articleError } = await supabase
+    .from('raw_articles')
+    .select('keyword_id,category,collected_at,tracked_keywords(keyword)')
+    .in('category', ['ai_business', 'startup', 'policy'])
+    .gte('collected_at', new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString())
+    .not('keyword_id', 'is', null);
+  if (articleError) console.error('[collect] rising keyword lookup failed:', articleError.message);
+
+  const keywordSelection = selectCollectionKeywords(keywords || [], (recentArticles || []).map((article) => ({
+    ...article,
+    keyword: article.tracked_keywords?.keyword,
+  })), {
     limitKeywords: process.env.BASE_COLLECT_LIMIT_KEYWORDS || 18,
     coreKeywordCount: process.env.BASE_COLLECT_CORE_KEYWORDS || 6,
     rotatingKeywordCount: process.env.BASE_COLLECT_ROTATING_KEYWORDS || 12,
     date: new Date(),
   });
+  const selectedKeywords = keywordSelection.selected;
 
   for (const kw of selectedKeywords) {
     try {
@@ -163,5 +175,6 @@ module.exports = async (req, res) => {
     policyNoticesUpserted,
     publicApiConfigured: Boolean(getServiceKey()),
     publicApiNoticesUpserted,
+    risingKeywordsApplied: keywordSelection.rising.length,
   });
 };

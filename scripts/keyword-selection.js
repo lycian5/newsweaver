@@ -1,5 +1,7 @@
 'use strict';
 
+const { selectRisingKeywords } = require('./rising-keywords');
+
 function selectHybridKeywords(keywords, options = {}) {
   const limit = Math.max(0, Number.parseInt(options.limitKeywords, 10) || 0);
   if (!limit || !keywords.length) return [];
@@ -33,4 +35,29 @@ function selectHybridKeywords(keywords, options = {}) {
   return [...core, ...rotating];
 }
 
-module.exports = { selectHybridKeywords };
+function selectCollectionKeywords(keywords, articleRows, options = {}) {
+  const selected = selectHybridKeywords(keywords, options);
+  const coreCount = Math.min(Number.parseInt(options.coreKeywordCount, 10) || 0, selected.length);
+  const core = selected.slice(0, coreCount);
+  const rising = selectRisingKeywords(articleRows, {
+    now: options.date,
+    perCategory: options.risingPerCategory || 2,
+  }).map((item) => ({
+    ...item,
+    id: item.keyword_id || keywords.find((keyword) => keyword.keyword === item.keyword && keyword.category === item.category)?.id || null,
+  })).filter((item) => item.id);
+  const seen = new Set();
+  const take = (items) => items.filter((item) => !seen.has(item.id) && seen.add(item.id));
+  const prioritized = [...take(core), ...take(rising), ...take(selected.slice(coreCount))];
+  const limit = Math.max(0, Number.parseInt(options.limitKeywords, 10) || 0);
+  const selectedKeywords = prioritized.slice(0, limit);
+  const selectedIds = new Set(selectedKeywords.map((item) => item.id));
+  return {
+    selected: selectedKeywords,
+    core,
+    rising: rising.filter((item) => selectedIds.has(item.id) && !core.some((keyword) => keyword.id === item.id)),
+    rotating: selectedKeywords.filter((item) => !core.some((keyword) => keyword.id === item.id) && !rising.some((keyword) => keyword.id === item.id)),
+  };
+}
+
+module.exports = { selectHybridKeywords, selectCollectionKeywords };

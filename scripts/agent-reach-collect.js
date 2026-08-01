@@ -5,7 +5,7 @@ const { spawn } = require('node:child_process');
 const { createHash } = require('node:crypto');
 const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { dirname } = require('node:path');
-const { selectHybridKeywords } = require('./keyword-selection');
+const { selectHybridKeywords, selectCollectionKeywords } = require('./keyword-selection');
 const {
   VALID_CATEGORIES,
   buildOfficialSearchQuery: buildLayeredOfficialSearchQuery,
@@ -52,15 +52,16 @@ if (require.main === module) {
 
 async function main() {
   const runStartedAt = new Date().toISOString();
-  const keywords = await loadKeywords();
+  const { keywords, risingArticles } = await loadKeywords();
+  const keywordSelection = selectCollectionKeywords(keywords, risingArticles, {
+    limitKeywords,
+    coreKeywordCount,
+    rotatingKeywordCount,
+    date: new Date(),
+  });
   const limitedKeywords = inlineKeywords.length
     ? keywords.slice(0, limitKeywords)
-    : selectHybridKeywords(keywords, {
-        limitKeywords,
-        coreKeywordCount,
-        rotatingKeywordCount,
-        date: new Date(),
-      });
+    : keywordSelection.selected;
   const allRows = [];
   const failures = [];
   let factsExtracted = 0;
@@ -113,6 +114,7 @@ async function main() {
     clustersAssigned,
     readyBriefs,
     factsExtracted,
+    risingKeywordsApplied: inlineKeywords.length ? 0 : keywordSelection.rising.length,
     failures,
   };
   console.log(JSON.stringify(summary, null, 2));
@@ -145,7 +147,20 @@ async function loadKeywords() {
     order: 'datalab_priority.asc,id.asc',
   });
   const data = await supabaseRequest(`${url}/rest/v1/tracked_keywords?${qs.toString()}`);
-  return data.map(normalizeKeyword).filter((item) => item.keyword);
+  let risingArticles = [];
+  try {
+    const articleQs = new URLSearchParams({
+      select: 'keyword_id,category,collected_at,tracked_keywords(keyword)',
+      category: 'in.(ai_business,startup,policy)',
+      collected_at: `gte.${new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString()}`,
+      keyword_id: 'not.is.null',
+    });
+    const articles = await supabaseRequest(`${url}/rest/v1/raw_articles?${articleQs.toString()}`);
+    risingArticles = (articles || []).map((article) => ({ ...article, keyword: article.tracked_keywords?.keyword }));
+  } catch (err) {
+    console.error(`[agent-reach] rising keyword lookup failed: ${err.message}`);
+  }
+  return { keywords: data.map(normalizeKeyword).filter((item) => item.keyword), risingArticles };
 }
 
 async function collectExa(keyword) {

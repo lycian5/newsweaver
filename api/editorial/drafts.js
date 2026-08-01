@@ -15,7 +15,7 @@ const {
   verifyDashboardPassword,
   verifyDashboardSession,
 } = require('../../lib/cronAuth');
-const { selectHybridKeywords } = require('../../scripts/keyword-selection');
+const { selectCollectionKeywords } = require('../../scripts/keyword-selection');
 const { selectRisingKeywords } = require('../../scripts/rising-keywords');
 
 module.exports = async (req, res) => {
@@ -81,18 +81,28 @@ async function listKeywords(req, res) {
     .order('id', { ascending: true });
   if (error) throw error;
 
-  const selected = selectHybridKeywords(keywords || [], {
+  const { data: articles, error: articleError } = await supabase
+    .from('raw_articles')
+    .select('keyword_id, category, collected_at, tracked_keywords(keyword)')
+    .in('category', ['ai_business', 'startup', 'policy'])
+    .gte('collected_at', new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString())
+    .not('keyword_id', 'is', null);
+  if (articleError) throw articleError;
+  const keywordSelection = selectCollectionKeywords(keywords || [], (articles || []).map((article) => ({
+    ...article,
+    keyword: article.tracked_keywords?.keyword,
+  })), {
     limitKeywords,
     coreKeywordCount,
     rotatingKeywordCount,
     date: new Date(),
   });
-  const coreCount = Math.min(coreKeywordCount, selected.length);
   const koreaDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
   res.status(200).json({
     date: koreaDate,
-    core: selected.slice(0, coreCount),
-    rotating: selected.slice(coreCount),
+    core: keywordSelection.core,
+    rising: keywordSelection.rising,
+    rotating: keywordSelection.rotating,
   });
 }
 
@@ -110,7 +120,7 @@ async function listRisingKeywords(req, res) {
   const items = selectRisingKeywords(
     (articles || []).map((article) => ({ ...article, keyword: article.tracked_keywords?.keyword }))
   );
-  res.status(200).json({ date: new Date().toISOString().slice(0, 10), items });
+  res.status(200).json({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10), items });
 }
 
 async function listBriefs(req, res) {

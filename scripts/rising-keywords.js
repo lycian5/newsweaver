@@ -18,7 +18,13 @@ function selectRisingKeywords(rows, options = {}) {
     if (!PRIMARY_CATEGORIES.has(category) || !keyword || !Number.isFinite(collectedAt) || collectedAt < baselineStart) continue;
 
     const key = `${category}:${row.keyword_id || keyword}`;
-    const candidate = candidates.get(key) || { category, keyword, recentCount: 0, baselineCount: 0 };
+    const candidate = candidates.get(key) || {
+      keyword_id: row.keyword_id || null,
+      category,
+      keyword,
+      recentCount: 0,
+      baselineCount: 0,
+    };
     if (collectedAt >= recentStart) candidate.recentCount += 1;
     else candidate.baselineCount += 1;
     candidates.set(key, candidate);
