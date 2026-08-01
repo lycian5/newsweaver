@@ -47,6 +47,8 @@ async function run() {
   delete process.env.NAVER_API_HUB_CLIENT_ID;
   delete process.env.NAVER_API_HUB_CLIENT_SECRET;
   assert.strictEqual(naverConfig().provider, 'legacy');
+  process.env.NAVER_API_HUB_CLIENT_ID = 'incomplete-hub-id';
+  assert.throws(() => naverConfig(), /함께 설정해야 합니다/);
   console.log('NAVER API Hub selection and request paths passed.');
 }
 
