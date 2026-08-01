@@ -3,6 +3,7 @@ const { assertCronAuth } = require('../../lib/cronAuth');
 const { searchNews } = require('../../lib/naver');
 const { searchGoogleNews } = require('../../lib/googleNews');
 const { fetchPolicyNotices } = require('../../lib/policySources');
+const { fetchPublicDataNotices, getServiceKey } = require('../../lib/publicDataSources');
 const { selectHybridKeywords } = require('../../scripts/keyword-selection');
 
 function stripHtml(str) {
@@ -110,6 +111,7 @@ module.exports = async (req, res) => {
   }
 
   let policyNoticesUpserted = 0;
+  let publicApiNoticesUpserted = 0;
   try {
     const notices = await fetchPolicyNotices();
     const policyRows = notices.map((n) => ({
@@ -132,10 +134,34 @@ module.exports = async (req, res) => {
     console.error('[collect] 정책 소스 수집 실패:', err.message);
   }
 
+  try {
+    const notices = await fetchPublicDataNotices();
+    const publicApiRows = notices.map((n) => ({
+      keyword_id: null,
+      category: n.category,
+      source: n.source,
+      title: n.title,
+      url: n.url,
+      summary: n.summary,
+      published_at: n.published_at,
+    }));
+    if (publicApiRows.length) {
+      const { error: upsertError } = await supabase
+        .from('raw_articles')
+        .upsert(publicApiRows, { onConflict: 'url', ignoreDuplicates: true });
+      if (upsertError) throw upsertError;
+      publicApiNoticesUpserted = publicApiRows.length;
+    }
+  } catch (err) {
+    console.error('[collect] 공공데이터 API 수집 실패:', err.message);
+  }
+
   res.status(200).json({
     keywordsProcessed: selectedKeywords.length,
     keywordFailures,
     articlesUpserted,
     policyNoticesUpserted,
+    publicApiConfigured: Boolean(getServiceKey()),
+    publicApiNoticesUpserted,
   });
 };
