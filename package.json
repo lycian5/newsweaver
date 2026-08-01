@@ -10,6 +10,7 @@
     "test:agent-reach": "node tests/test_agent_reach_options.js",
     "test:agent-reach-github": "node tests/test_agent_reach_github_query.js",
     "test:agent-reach-youtube": "node tests/test_agent_reach_youtube_api.js",
+    "test:agent-reach-exa": "node tests/test_agent_reach_exa_api.js",
     "test:agent-reach-runner": "node tests/test_agent_reach_runner.js",
     "test:collection-notifications": "node tests/test_collection_notifications.js",
     "test:research-metadata": "node tests/test_research_metadata.js",

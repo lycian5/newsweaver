@@ -3,6 +3,8 @@
 
 const { spawn } = require('node:child_process');
 const { createHash } = require('node:crypto');
+const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { dirname } = require('node:path');
 const { selectHybridKeywords } = require('./keyword-selection');
 const {
   VALID_CATEGORIES,
@@ -29,13 +31,17 @@ const inlineKeywords = splitList(args.keywords || process.env.AGENT_REACH_KEYWOR
 const limitKeywords = intArg('limit-keywords', process.env.AGENT_REACH_LIMIT_KEYWORDS, 54);
 const coreKeywordCount = intArg('core-keywords', process.env.AGENT_REACH_CORE_KEYWORDS, 12);
 const rotatingKeywordCount = intArg('rotating-keywords', process.env.AGENT_REACH_ROTATING_KEYWORDS, 42);
-const exaResults = intArg('exa-results', process.env.AGENT_REACH_EXA_RESULTS, 5);
+const exaResults = Math.min(intArg('exa-results', process.env.AGENT_REACH_EXA_RESULTS, 3), 3);
 const officialResults = intArg('official-results', process.env.AGENT_REACH_OFFICIAL_RESULTS, 3);
 const youtubeResults = intArg('youtube-results', process.env.AGENT_REACH_YOUTUBE_RESULTS, 3);
 const githubResults = intArg('github-results', process.env.AGENT_REACH_GITHUB_RESULTS, 5);
 const redditResults = intArg('reddit-results', process.env.AGENT_REACH_REDDIT_RESULTS, 5);
 const timeoutMs = intArg('timeout-ms', process.env.AGENT_REACH_TIMEOUT_MS, 45000);
 const jinaEnrich = boolArg('jina-enrich', parseBool(process.env.AGENT_REACH_JINA_ENRICH, false));
+const exaDailyRequestLimit = intArg('exa-daily-request-limit', process.env.AGENT_REACH_EXA_DAILY_REQUEST_LIMIT, 36);
+const exaMonthlyBudgetUsd = numberArg('exa-monthly-budget-usd', process.env.AGENT_REACH_EXA_MONTHLY_BUDGET_USD, 8);
+const exaUsageFile = process.env.AGENT_REACH_EXA_USAGE_FILE || '/opt/n8n/data/agent-reach-exa-usage.json';
+let exaUsageState = null;
 
 if (require.main === module) {
   main().catch((err) => {
@@ -151,6 +157,9 @@ async function collectOfficial(keyword) {
 }
 
 async function collectExaQuery(keyword, query, resultLimit, source, queryStage, sourceLayer) {
+  if (process.env.EXA_API_KEY) {
+    return collectExaApiQuery(keyword, query, resultLimit, source, queryStage, sourceLayer);
+  }
   const output = await runCommand('mcporter', [
     'call',
     'exa.web_search_exa',
@@ -181,6 +190,86 @@ async function collectExaQuery(keyword, query, resultLimit, source, queryStage, 
     }));
   }
   return rows;
+}
+
+async function collectExaApiQuery(keyword, query, resultLimit, source, queryStage, sourceLayer) {
+  if (!reserveExaRequest()) return [];
+
+  const res = await fetchWithTimeout('https://api.exa.ai/search', timeoutMs, {
+    method: 'POST',
+    headers: {
+      'x-api-key': process.env.EXA_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query,
+      category: 'news',
+      numResults: Math.min(resultLimit, 3),
+      contents: { highlights: true },
+    }),
+  });
+  const payload = await res.json().catch(() => ({}));
+  recordExaCost(payload?.costDollars?.total);
+  if (!res.ok) {
+    throw new Error(`Exa API HTTP ${res.status}: ${String(payload?.error || payload?.message || '').slice(0, 300)}`);
+  }
+
+  return (payload.results || [])
+    .filter((result) => result?.url && result?.title)
+    .filter((result) => source !== 'agent_reach_official' || isOfficialDomain(result.url))
+    .map((result) => makeRow(keyword, {
+      source,
+      title: result.title,
+      url: result.url,
+      summary: (result.highlights || []).join(' ') || result.summary || result.text || null,
+      published_at: result.publishedDate || null,
+      query_stage: queryStage,
+      source_layer: sourceLayer,
+    }));
+}
+
+function reserveExaRequest() {
+  const usage = loadExaUsage();
+  if (usage.dailyRequests >= exaDailyRequestLimit || usage.monthlySpendUsd >= exaMonthlyBudgetUsd) return false;
+  usage.dailyRequests += 1;
+  saveExaUsage(usage);
+  return true;
+}
+
+function recordExaCost(cost) {
+  const value = Number(cost);
+  if (!Number.isFinite(value) || value < 0) return;
+  const usage = loadExaUsage();
+  usage.monthlySpendUsd += value;
+  saveExaUsage(usage);
+}
+
+function loadExaUsage() {
+  const today = new Date().toISOString().slice(0, 10);
+  const month = today.slice(0, 7);
+  if (!exaUsageState) {
+    try {
+      exaUsageState = JSON.parse(readFileSync(exaUsageFile, 'utf8'));
+    } catch {
+      exaUsageState = {};
+    }
+  }
+  if (exaUsageState.day !== today) {
+    exaUsageState.day = today;
+    exaUsageState.dailyRequests = 0;
+  }
+  if (exaUsageState.month !== month) {
+    exaUsageState.month = month;
+    exaUsageState.monthlySpendUsd = 0;
+  }
+  exaUsageState.dailyRequests = Number(exaUsageState.dailyRequests) || 0;
+  exaUsageState.monthlySpendUsd = Number(exaUsageState.monthlySpendUsd) || 0;
+  return exaUsageState;
+}
+
+function saveExaUsage(usage) {
+  mkdirSync(dirname(exaUsageFile), { recursive: true });
+  writeFileSync(exaUsageFile, `${JSON.stringify(usage, null, 2)}\n`, 'utf8');
 }
 
 async function collectYoutube(keyword) {
@@ -847,6 +936,12 @@ function intArg(name, envValue, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function numberArg(name, envValue, fallback) {
+  const value = args[name] ?? envValue;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
 function boolArg(name, fallback) {
   if (args[name] == null) return fallback;
   return parseBool(args[name], fallback);
@@ -1045,6 +1140,8 @@ module.exports = {
   buildGithubQuery,
   buildYoutubeSearchQuery,
   collectYoutube,
+  collectExa,
+  collectOfficial,
   buildOfficialSearchQuery,
   classifySource,
   dateDistanceDays,
