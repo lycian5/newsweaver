@@ -184,6 +184,10 @@ async function collectExaQuery(keyword, query, resultLimit, source, queryStage, 
 }
 
 async function collectYoutube(keyword) {
+  if (process.env.YOUTUBE_API_KEY) {
+    return collectYoutubeApi(keyword);
+  }
+
   const query = buildSearchQuery(keyword);
   const output = await runCommand('yt-dlp', [
     '--dump-json',
@@ -202,6 +206,48 @@ async function collectYoutube(keyword) {
       query_stage: 'explore',
       source_layer: 'signal',
     }));
+}
+
+async function collectYoutubeApi(keyword) {
+  const url = new URL('https://www.googleapis.com/youtube/v3/search');
+  url.searchParams.set('key', process.env.YOUTUBE_API_KEY);
+  url.searchParams.set('part', 'snippet');
+  url.searchParams.set('q', buildYoutubeSearchQuery(keyword));
+  url.searchParams.set('type', 'video');
+  url.searchParams.set('order', 'date');
+  url.searchParams.set('maxResults', String(Math.min(youtubeResults, 50)));
+  url.searchParams.set('safeSearch', 'strict');
+  url.searchParams.set('relevanceLanguage', 'ko');
+  url.searchParams.set(
+    'publishedAfter',
+    new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  );
+
+  const res = await fetchWithTimeout(url, timeoutMs);
+  if (!res.ok) {
+    throw new Error(`YouTube Data API HTTP ${res.status}`);
+  }
+  const payload = await res.json();
+  return (payload.items || [])
+    .filter((item) => item?.id?.videoId && item?.snippet?.title)
+    .map((item) => makeRow(keyword, {
+      source: 'agent_reach_youtube_api',
+      title: item.snippet.title,
+      url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      summary: item.snippet.description || item.snippet.channelTitle || null,
+      published_at: item.snippet.publishedAt || null,
+      query_stage: 'explore',
+      source_layer: 'signal',
+    }));
+}
+
+function buildYoutubeSearchQuery(keyword) {
+  const context = {
+    ai_business: 'AI 비즈니스 자동화 에이전트',
+    startup: '창업 부업 스타트업',
+    policy: '정부 지원사업 소상공인',
+  }[keyword.category] || '';
+  return `${keyword.keyword} ${context}`.trim();
 }
 
 async function collectGithub(keyword) {
@@ -997,6 +1043,8 @@ function requiredEnv(name) {
 module.exports = {
   buildRedditSearchQuery,
   buildGithubQuery,
+  buildYoutubeSearchQuery,
+  collectYoutube,
   buildOfficialSearchQuery,
   classifySource,
   dateDistanceDays,
