@@ -8,6 +8,7 @@
     "test:models": "node tests/test_openai_models.js",
     "test:naver-api-hub": "node tests/test_naver_api_hub.js",
     "test:agent-reach": "node tests/test_agent_reach_options.js",
+    "test:agent-reach-github": "node tests/test_agent_reach_github_query.js",
     "test:agent-reach-runner": "node tests/test_agent_reach_runner.js",
     "test:collection-notifications": "node tests/test_collection_notifications.js",
     "test:research-metadata": "node tests/test_research_metadata.js",

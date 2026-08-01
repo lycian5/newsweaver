@@ -206,7 +206,7 @@ async function collectYoutube(keyword) {
 
 async function collectGithub(keyword) {
   if (keyword.category !== 'ai_business') return [];
-  const query = `${keyword.keyword} AI agent automation`;
+  const query = buildGithubQuery(keyword);
   const output = await runCommand('gh', [
     'search',
     'repos',
@@ -215,6 +215,8 @@ async function collectGithub(keyword) {
     'fullName,description,url,updatedAt',
     '--limit',
     String(githubResults),
+    '--sort',
+    'updated',
   ]);
   const repos = parseJson(output.stdout);
   if (!Array.isArray(repos)) return [];
@@ -227,6 +229,15 @@ async function collectGithub(keyword) {
     query_stage: 'precision',
     source_layer: 'signal',
   }));
+}
+
+function buildGithubQuery(keyword) {
+  const value = String(keyword.keyword || '').toLowerCase();
+  if (/노코드|rpa|업무\s*자동화|자동화/.test(value)) return 'workflow automation AI';
+  if (/에이전트|agent/.test(value)) return 'AI agent automation';
+  if (/llm|챗gpt|chatgpt|제미나이|gemini|클로드|claude|생성형/.test(value)) return 'LLM agent';
+  if (/스타트업|saas|창업/.test(value)) return 'AI SaaS';
+  return 'AI agent automation';
 }
 
 async function collectReddit(keyword) {
@@ -985,6 +996,7 @@ function requiredEnv(name) {
 
 module.exports = {
   buildRedditSearchQuery,
+  buildGithubQuery,
   buildOfficialSearchQuery,
   classifySource,
   dateDistanceDays,
