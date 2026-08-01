@@ -134,6 +134,7 @@ async function loadKeywords() {
   const url = requiredEnv('SUPABASE_URL');
   const qs = new URLSearchParams({
     status: 'eq.active',
+    added_by: 'eq.manual',
     select: 'id,keyword,category,datalab_priority',
     order: 'datalab_priority.asc,id.asc',
   });

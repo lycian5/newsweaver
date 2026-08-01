@@ -39,6 +39,7 @@ module.exports = async (req, res) => {
     .from('tracked_keywords')
     .select('id, keyword, category, datalab_priority')
     .eq('status', 'active')
+    .eq('added_by', 'manual')
     .order('datalab_priority', { ascending: true })
     .order('id', { ascending: true });
 

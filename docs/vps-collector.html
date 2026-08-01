@@ -12,7 +12,7 @@
     input,textarea{width:100%;border:1px solid #bdcbd2;border-radius:5px;padding:10px;font:inherit}textarea{min-height:95px;resize:vertical}.checks{display:flex;gap:18px;flex-wrap:wrap}.checks label{font-size:14px}.checks input{width:auto}
     .hint{font-size:12px;color:#5f6f78;margin-top:6px}.actions{display:flex;gap:10px;align-items:center}.btn{border:0;border-radius:5px;padding:11px 18px;font-weight:700;cursor:pointer}.primary{background:#087ea4;color:#fff}.btn:disabled{opacity:.55;cursor:wait}
     pre{white-space:pre-wrap;word-break:break-word;background:#111b22;color:#d9edf4;padding:15px;border-radius:6px;min-height:100px}.ok{color:#087a43}.error{color:#b42318}
-    .keyword-summary{margin:14px 0;padding:14px;border:1px solid #dce4e8;border-radius:6px;background:#f8fafb}.keyword-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.keyword-head strong{font-size:14px}.keyword-groups{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.keyword-group{padding:12px;background:#fff;border:1px solid #dce4e8;border-radius:6px}.keyword-group h3{font-size:13px;margin:0 0 9px}.keyword-list{display:flex;gap:7px;flex-wrap:wrap}.keyword-chip{padding:6px 9px;border-radius:4px;background:#e5f4f9;color:#075f7d;font-size:13px;font-weight:700}.keyword-chip.rotating{background:#fff1d6;color:#8a5200}
+    .keyword-summary{margin:14px 0;padding:14px;border:1px solid #dce4e8;border-radius:6px;background:#f8fafb}.keyword-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.keyword-head strong{font-size:14px}.keyword-groups{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}.keyword-group{padding:12px;background:#fff;border:1px solid #dce4e8;border-radius:6px}.keyword-group h3{font-size:13px;margin:0 0 9px}.keyword-list{display:flex;gap:7px;flex-wrap:wrap}.keyword-chip{padding:6px 9px;border-radius:4px;background:#e5f4f9;color:#075f7d;font-size:13px;font-weight:700}.keyword-chip.rotating{background:#fff1d6;color:#8a5200}.keyword-chip.rising{background:#ffe1e8;color:#9c174d}
     .flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.flow-step{padding:12px;border:1px solid #dce4e8;border-radius:6px;background:#f8fafb}.flow-step strong{display:block;color:#075f7d;font-size:14px}.flow-step span{display:block;margin-top:5px;font-size:12px;color:#5f6f78;line-height:1.45}
     @media(max-width:640px){.grid,.keyword-groups,.flow{grid-template-columns:1fr}}
   </style>
@@ -48,6 +48,11 @@
         <div class="field"><label>관리자 세션</label><button id="logout" class="btn" type="button">로그아웃</button></div>
       </div>
       <div class="field" style="margin-top:14px"><label for="keywords">직접 키워드 (선택)</label><textarea id="keywords" placeholder="AI 스타트업, 소상공인 지원, 업무 자동화"></textarea></div>
+      <div class="keyword-summary">
+        <div class="keyword-head"><strong>오늘의 급상승 키워드</strong><button id="loadRisingKeywords" class="btn" type="button">급상승 확인</button></div>
+        <div id="risingKeywords" class="keyword-list"><span class="hint">최근 24시간 기사량과 직전 7일 평균을 비교합니다.</span></div>
+        <p id="risingKeywordDate" class="hint">기본 54개 수집과 별도로 편집 우선순위를 판단하는 후보군입니다.</p>
+      </div>
     </section>
     <section class="panel">
       <h2>권장 일과 후 발행 흐름</h2>
@@ -77,6 +82,7 @@
     const status = document.getElementById('status');
     const result = document.getElementById('result');
     const loadKeywords = document.getElementById('loadKeywords');
+    const loadRisingKeywords = document.getElementById('loadRisingKeywords');
     const saveSchedule = document.getElementById('saveSchedule');
     const scheduleStatus = document.getElementById('scheduleStatus');
     async function loadSchedule() {
@@ -123,6 +129,21 @@
       } catch (error) { showKeywordError(error.message); }
       finally { loadKeywords.disabled = false; }
     });
+    loadRisingKeywords.addEventListener('click', async () => {
+      loadRisingKeywords.disabled = true;
+      try {
+        const response = await CoaAuth.request('/api/editorial/drafts?view=rising-keywords');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        const target = document.getElementById('risingKeywords');
+        target.innerHTML = data.items.length
+          ? data.items.map(item => `<span class="keyword-chip rising" title="최근 24시간 ${item.recentCount}건 · 증가 ${item.growth}">${escapeHtml(item.keyword)}</span>`).join('')
+          : '<span class="hint">최근 수집 데이터가 아직 부족합니다.</span>';
+        document.getElementById('risingKeywordDate').textContent = `${data.date} 기준 · 최근 24시간 기사량과 직전 7일 일평균을 비교했습니다.`;
+      } catch (error) {
+        document.getElementById('risingKeywords').innerHTML = `<span class="error">${escapeHtml(error.message)}</span>`;
+      } finally { loadRisingKeywords.disabled = false; }
+    });
     run.addEventListener('click', async () => {
       const sources = [...document.querySelectorAll('[name=source]:checked')].map(el => el.value);
       if (!sources.length) return show('수집 채널을 하나 이상 선택하세요.', false);
@@ -165,7 +186,7 @@
     function escapeHtml(value) { return String(value || '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
     function show(message, ok) { status.textContent = ok ? '완료' : '실패'; status.className = ok ? 'ok' : 'error'; result.textContent = message; }
     document.getElementById('logout').onclick = CoaAuth.logout;
-    CoaAuth.requireSession().then((authenticated) => { if (authenticated) { loadKeywords.click(); loadSchedule(); } });
+    CoaAuth.requireSession().then((authenticated) => { if (authenticated) { loadKeywords.click(); loadRisingKeywords.click(); loadSchedule(); } });
   </script>
 </body>
 </html>

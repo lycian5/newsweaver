@@ -16,6 +16,7 @@ const {
   verifyDashboardSession,
 } = require('../../lib/cronAuth');
 const { selectHybridKeywords } = require('../../scripts/keyword-selection');
+const { selectRisingKeywords } = require('../../scripts/rising-keywords');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -29,6 +30,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && req.query?.view === 'briefs') return listBriefs(req, res);
     if (req.method === 'GET' && req.query?.view === 'brief') return getBrief(req, res);
     if (req.method === 'GET' && req.query?.view === 'keywords') return listKeywords(req, res);
+    if (req.method === 'GET' && req.query?.view === 'rising-keywords') return listRisingKeywords(req, res);
     if (req.method === 'GET') return listDrafts(req, res);
     if (req.method === 'POST' && req.body?.action === 'prepare') return prepareArticleDraft(req, res);
     if (req.method === 'POST' && req.body?.action === 'ai_generate') return generateDraftWithAi(req, res);
@@ -74,6 +76,7 @@ async function listKeywords(req, res) {
     .from('tracked_keywords')
     .select('id, keyword, category, datalab_priority')
     .eq('status', 'active')
+    .eq('added_by', 'manual')
     .order('datalab_priority', { ascending: true })
     .order('id', { ascending: true });
   if (error) throw error;
@@ -91,6 +94,23 @@ async function listKeywords(req, res) {
     core: selected.slice(0, coreCount),
     rotating: selected.slice(coreCount),
   });
+}
+
+async function listRisingKeywords(req, res) {
+  const supabase = getSupabase();
+  const since = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: articles, error } = await supabase
+    .from('raw_articles')
+    .select('keyword_id, category, collected_at, tracked_keywords(keyword)')
+    .in('category', ['ai_business', 'startup', 'policy'])
+    .gte('collected_at', since)
+    .not('keyword_id', 'is', null);
+  if (error) throw error;
+
+  const items = selectRisingKeywords(
+    (articles || []).map((article) => ({ ...article, keyword: article.tracked_keywords?.keyword }))
+  );
+  res.status(200).json({ date: new Date().toISOString().slice(0, 10), items });
 }
 
 async function listBriefs(req, res) {

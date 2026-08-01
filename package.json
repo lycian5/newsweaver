@@ -11,6 +11,7 @@
     "test:collection-notifications": "node tests/test_collection_notifications.js",
     "test:research-metadata": "node tests/test_research_metadata.js",
     "test:research-taxonomy": "node tests/test_research_query_taxonomy.js",
+    "test:rising-keywords": "node tests/test_rising_keywords.js",
     "test:collection-schedule": "node tests/test_collection_schedule.js",
     "test:research-briefs": "node tests/test_research_briefs.js",
     "test:editorial-workflow": "node tests/test_editorial_workflow.js",
