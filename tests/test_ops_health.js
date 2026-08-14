@@ -18,5 +18,6 @@ assert.ok(deploy.includes("sed -i 's/\\r$//' .env"));
 assert.match(deploy, /ufw allow from "\$N8N_DOCKER_SUBNET" to any port 8787/);
 assert.match(deploy, /research-query-taxonomy\.js/);
 assert.match(deploy, /collection-notifications\.js/);
+assert.match(deploy, /freeCollection\.js/);
 assert.doesNotMatch(deploy, /ufw allow 8787/);
 process.stdout.write('Operations health checks passed.\n');

@@ -2,10 +2,11 @@
 'use strict';
 
 const { spawn } = require('node:child_process');
-const { createHash } = require('node:crypto');
+const { randomUUID } = require('node:crypto');
 const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { dirname } = require('node:path');
 const { selectHybridKeywords, selectCollectionKeywords } = require('./keyword-selection');
+const freeCollection = require('../lib/freeCollection');
 const {
   VALID_CATEGORIES,
   buildOfficialSearchQuery: buildLayeredOfficialSearchQuery,
@@ -52,72 +53,165 @@ if (require.main === module) {
 
 async function main() {
   const runStartedAt = new Date().toISOString();
-  const { keywords, risingArticles } = await loadKeywords();
-  const keywordSelection = selectCollectionKeywords(keywords, risingArticles, {
-    limitKeywords,
-    coreKeywordCount,
-    rotatingKeywordCount,
-    date: new Date(),
-  });
-  const limitedKeywords = inlineKeywords.length
-    ? keywords.slice(0, limitKeywords)
-    : keywordSelection.selected;
-  const allRows = [];
-  const failures = [];
-  let factsExtracted = 0;
+  let runId = null;
+  try {
+    const { keywords, risingArticles } = await loadKeywords();
+    const keywordSelection = selectCollectionKeywords(keywords, risingArticles, {
+      limitKeywords,
+      coreKeywordCount,
+      rotatingKeywordCount,
+      date: new Date(),
+    });
+    const limitedKeywords = inlineKeywords.length
+      ? keywords.slice(0, limitKeywords)
+      : keywordSelection.selected;
+    const allRows = [];
+    const failures = [];
+    let factsExtracted = 0;
 
-  for (const keyword of limitedKeywords) {
-    const collectors = [
-      ['exa', collectExa],
-      ['official', collectOfficial],
-      ['rss', collectRss],
-      ['youtube', collectYoutube],
-      ['github', collectGithub],
-      ['reddit', collectReddit],
-    ];
+    if (!dryRun) {
+      runId = randomUUID();
+      await startCollectionRun(runId, runStartedAt, limitedKeywords.length);
+    }
 
-    for (const [name, collector] of collectors) {
-      if (!sources.includes(name)) continue;
-      try {
-        const rows = await collector(keyword);
-        allRows.push(...rows);
-      } catch (err) {
-        failures.push({ source: name, keyword: keyword.keyword, error: err.message });
+    for (const keyword of limitedKeywords) {
+      const collectors = [
+        ['exa', collectExa],
+        ['official', collectOfficial],
+        ['rss', collectRss],
+        ['youtube', collectYoutube],
+        ['github', collectGithub],
+        ['reddit', collectReddit],
+      ];
+
+      for (const [name, collector] of collectors) {
+        if (!sources.includes(name)) continue;
+        try {
+          const rows = await collector(keyword);
+          allRows.push(...rows);
+        } catch (err) {
+          failures.push({ source: name, keyword: keyword.keyword, error: err.message });
+        }
       }
     }
-  }
 
-  const rows = dedupeRows(allRows);
-  let clustersAssigned = 0;
-  let readyBriefs = 0;
-  if (!dryRun && rows.length) {
-    const savedRows = await upsertRawArticles(rows);
-    clustersAssigned = await assignEventClusters(savedRows);
-    clustersAssigned += await backfillUnclusteredArticles();
-    await backfillMissingClusterDates();
-    factsExtracted = await upsertArticleFacts(savedRows);
-    await touchKeywords(rows);
-    try {
-      readyBriefs = await countReadyBriefsSince(runStartedAt);
-    } catch (err) {
-      failures.push({ source: 'briefs', keyword: '', error: `Ready brief count failed: ${err.message}` });
+    const normalization = freeCollection.normalizeAndDedupe(allRows);
+    const rows = normalization.rows;
+    let savedRows = [];
+    let clusterStats = emptyClusterStats();
+    let readyBriefs = 0;
+    if (!dryRun && rows.length) {
+      savedRows = await upsertRawArticles(rows);
+      clusterStats = mergeClusterStats(clusterStats, await assignEventClusters(savedRows));
+      clusterStats = mergeClusterStats(clusterStats, await backfillUnclusteredArticles());
+      await backfillMissingClusterDates();
+      factsExtracted = await upsertArticleFacts(savedRows);
+      await touchKeywords(rows);
+      try {
+        readyBriefs = await countReadyBriefsSince(runStartedAt);
+      } catch (err) {
+        failures.push({ source: 'briefs', keyword: '', error: `Ready brief count failed: ${err.message}` });
+      }
     }
-  }
 
-  const summary = {
-    ok: true,
-    dryRun,
-    sources,
-    keywordsProcessed: limitedKeywords.length,
-    rowsPrepared: rows.length,
-    rowsUpserted: dryRun ? 0 : rows.length,
-    clustersAssigned,
-    readyBriefs,
-    factsExtracted,
-    risingKeywordsApplied: inlineKeywords.length ? 0 : keywordSelection.rising.length,
-    failures,
+    const status = failures.length ? 'partial' : 'succeeded';
+    const funnel = {
+      ...normalization.funnel,
+      stored: dryRun ? 0 : savedRows.length,
+      clustered_articles: clusterStats.articlesAssigned,
+      clusters_created: clusterStats.clustersCreated,
+      clusters_updated: clusterStats.clustersUpdated,
+      facts_extracted: factsExtracted,
+      ready_briefs: readyBriefs,
+    };
+    const summary = {
+      ok: true,
+      status,
+      collectionRunId: runId,
+      dryRun,
+      sources,
+      keywordsProcessed: limitedKeywords.length,
+      rowsDiscovered: allRows.length,
+      rowsPrepared: rows.length,
+      rowsUpserted: dryRun ? 0 : savedRows.length,
+      clustersAssigned: clusterStats.articlesAssigned,
+      clustersCreated: clusterStats.clustersCreated,
+      clustersUpdated: clusterStats.clustersUpdated,
+      readyBriefs,
+      factsExtracted,
+      funnel,
+      risingKeywordsApplied: inlineKeywords.length ? 0 : keywordSelection.rising.length,
+      failures,
+    };
+    if (runId) await finishCollectionRun(runId, summary);
+    console.log(JSON.stringify(summary, null, 2));
+  } catch (err) {
+    if (runId) await failCollectionRun(runId, err).catch(() => {});
+    throw err;
+  }
+}
+
+function emptyClusterStats() {
+  return { articlesAssigned: 0, clustersCreated: 0, clustersUpdated: 0 };
+}
+
+function mergeClusterStats(left, right) {
+  return {
+    articlesAssigned: left.articlesAssigned + right.articlesAssigned,
+    clustersCreated: left.clustersCreated + right.clustersCreated,
+    clustersUpdated: left.clustersUpdated + right.clustersUpdated,
   };
-  console.log(JSON.stringify(summary, null, 2));
+}
+
+async function startCollectionRun(id, startedAt, keywordCount) {
+  await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/collection_runs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      id,
+      collector: 'agent_reach',
+      trigger: dryRun ? 'dry_run' : 'runner',
+      status: 'running',
+      sources,
+      keywords_processed: keywordCount,
+      started_at: startedAt,
+    }),
+  });
+}
+
+async function finishCollectionRun(id, summary) {
+  await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/collection_runs?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: summary.status,
+      completed_at: new Date().toISOString(),
+      keywords_processed: summary.keywordsProcessed,
+      discovered_count: summary.funnel.discovered,
+      normalized_count: summary.funnel.normalized,
+      unique_count: summary.funnel.unique,
+      stored_count: summary.funnel.stored,
+      clustered_article_count: summary.funnel.clustered_articles,
+      clusters_created_count: summary.funnel.clusters_created,
+      clusters_updated_count: summary.funnel.clusters_updated,
+      ready_brief_count: summary.funnel.ready_briefs,
+      fact_count: summary.funnel.facts_extracted,
+      rejection_counts: summary.funnel.rejection_counts,
+      source_failures: summary.failures,
+    }),
+  });
+}
+
+async function failCollectionRun(id, error) {
+  await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/collection_runs?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      source_failures: [{ source: 'pipeline', error: String(error?.message || error).slice(0, 500) }],
+    }),
+  });
 }
 
 async function countReadyBriefsSince(since) {
@@ -133,10 +227,11 @@ async function countReadyBriefsSince(since) {
 
 async function loadKeywords() {
   if (inlineKeywords.length) {
-    return inlineKeywords.map((entry) => {
+    const keywords = inlineKeywords.map((entry) => {
       const [keyword, category = 'ai_business'] = entry.split(':').map((part) => part.trim());
       return normalizeKeyword({ id: null, keyword, category });
     }).filter((item) => item.keyword);
+    return { keywords, risingArticles: [] };
   }
 
   const url = requiredEnv('SUPABASE_URL');
@@ -564,32 +659,24 @@ function parseExaText(text) {
 }
 
 function makeRow(keyword, item) {
-  const category = VALID_CATEGORIES.has(keyword.category) ? keyword.category : 'ai_business';
-  const canonicalUrl = normalizeUrl(item.url);
-  const sourceProfile = classifySource(item.source, canonicalUrl);
-  const title = cleanText(item.title || item.url || 'Untitled').slice(0, 500);
-  const summary = item.summary ? cleanText(item.summary).slice(0, 1200) : null;
-  const publishedAt = toIsoOrNull(item.published_at);
-  const evidenceScore = scoreEvidence(title, summary);
-  return {
+  const normalized = freeCollection.normalizeArticle({
     keyword_id: keyword.id || null,
-    category,
-    source: String(item.source || 'agent_reach').slice(0, 120),
-    title,
-    url: canonicalUrl,
-    summary,
-    published_at: publishedAt,
-    canonical_url: canonicalUrl,
-    source_domain: hostName(canonicalUrl),
-    source_type: sourceProfile.type,
-    authority_score: sourceProfile.authority,
-    evidence_score: evidenceScore,
-    quality_score: scoreQuality(sourceProfile.authority, evidenceScore, publishedAt),
-    verification_status: sourceProfile.type === 'official' ? 'verified' : 'needs_verification',
+    category: VALID_CATEGORIES.has(keyword.category) ? keyword.category : 'ai_business',
+    source: item.source || 'agent_reach',
+    title: item.title || item.url || 'Untitled',
+    url: item.url,
+    summary: item.summary,
+    published_at: item.published_at,
     query_stage: item.query_stage || 'explore',
-    source_layer: item.source_layer || (sourceProfile.type === 'official' ? 'official' : 'signal'),
-    event_fingerprint: eventFingerprint(title, publishedAt, category),
-    last_checked_at: new Date().toISOString(),
+    source_layer: item.source_layer,
+  });
+  return normalized.row || {
+    keyword_id: keyword.id || null,
+    category: keyword.category,
+    source: item.source || 'agent_reach',
+    title: item.title || '',
+    url: item.url || '',
+    skip: true,
   };
 }
 
@@ -604,20 +691,6 @@ function makeFailureRow(keyword, source, url, message) {
     }),
     skip: true,
   };
-}
-
-function dedupeRows(rows) {
-  const seen = new Set();
-  const result = [];
-  for (const row of rows) {
-    if (!row.url || !/^https?:\/\//i.test(row.url)) continue;
-    if (!row.title || row.title.length < 3) continue;
-    const key = row.url.replace(/#.*$/, '');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(row);
-  }
-  return result;
 }
 
 async function upsertRawArticles(rows) {
@@ -638,27 +711,38 @@ async function upsertRawArticles(rows) {
 }
 
 async function assignEventClusters(rows) {
-  if (!rows.length) return 0;
+  if (!rows.length) return emptyClusterStats();
   const clusters = await loadRecentEventClusters();
   const affectedIds = new Set();
+  let clustersCreated = 0;
 
   for (const row of rows) {
-    let cluster = findMatchingCluster(row, clusters);
+    const match = freeCollection.findClusterMatch(row, clusters);
+    let cluster = match?.cluster || null;
     if (!cluster) {
       cluster = await createEventCluster(row);
       clusters.unshift(cluster);
+      clustersCreated += 1;
     }
     await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/raw_articles?id=eq.${row.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event_cluster_id: cluster.id }),
+      body: JSON.stringify({
+        event_cluster_id: cluster.id,
+        cluster_match_method: match?.method || 'created',
+        cluster_match_score: match?.score || 1,
+      }),
     });
     row.event_cluster_id = cluster.id;
     affectedIds.add(cluster.id);
   }
 
   for (const clusterId of affectedIds) await refreshEventCluster(clusterId);
-  return rows.length;
+  return {
+    articlesAssigned: rows.length,
+    clustersCreated,
+    clustersUpdated: affectedIds.size,
+  };
 }
 
 async function backfillUnclusteredArticles() {
@@ -746,15 +830,7 @@ async function loadRecentEventClusters() {
 }
 
 function findMatchingCluster(row, clusters) {
-  const exact = clusters.find((cluster) => cluster.fingerprint === row.event_fingerprint);
-  if (exact) return exact;
-  const rowDate = eventDate(row.published_at || row.collected_at);
-  if (!rowDate) return null;
-  return clusters.find((cluster) => {
-    if (cluster.category !== row.category || !cluster.event_date) return false;
-    if (dateDistanceDays(rowDate, cluster.event_date) > 1) return false;
-    return titleSimilarity(row.title, cluster.representative_title) >= 0.55;
-  }) || null;
+  return freeCollection.findMatchingCluster(row, clusters);
 }
 
 async function createEventCluster(row) {
@@ -1030,103 +1106,47 @@ function stripTags(value) {
 }
 
 function cleanText(value) {
-  return stripTags(decodeXml(value)).replace(/\s+/g, ' ').trim();
+  return freeCollection.cleanText(value);
 }
 
 function normalizeUrl(value) {
-  const text = String(value || '').trim();
-  try {
-    const url = new URL(text);
-    url.hash = '';
-    for (const key of [...url.searchParams.keys()]) {
-      if (/^(utm_|fbclid$|gclid$|ref$|source$|campaign$)/i.test(key)) url.searchParams.delete(key);
-    }
-    url.hostname = url.hostname.toLowerCase();
-    if ((url.protocol === 'https:' && url.port === '443') || (url.protocol === 'http:' && url.port === '80')) url.port = '';
-    return url.toString();
-  } catch {
-    return text;
-  }
+  return freeCollection.normalizeUrl(value);
 }
 
 function classifySource(source, url) {
-  const domain = hostName(url);
-  if (isOfficialDomain(url)) return { type: 'official', authority: /\.go\.kr$|\.gov(?:\.kr)?$/.test(domain) ? 95 : 90 };
-  if (/youtube/i.test(source) || /youtube\.com|youtu\.be/.test(domain)) return { type: 'video', authority: 35 };
-  if (/github/i.test(source) || domain === 'github.com') return { type: 'repository', authority: 45 };
-  if (/reddit|community|cafe|blog/i.test(source) || /reddit\.com|blog\.naver\.com/.test(domain)) return { type: 'community', authority: 25 };
-  if (/newsroom|press_release/i.test(source)) return { type: 'official', authority: 85 };
-  if (/rss|exa/i.test(source)) return { type: 'media', authority: 55 };
-  return { type: 'unknown', authority: 40 };
+  return freeCollection.classifySource(source, url);
 }
 
 function isOfficialDomain(url) {
-  const domain = hostName(url);
-  return /\.go\.kr$|\.gov$|\.gov\.kr$|korea\.kr$|kosis\.kr$|data\.go\.kr$|dart\.fss\.or\.kr$|nipa\.kr$|kisa\.or\.kr$|semas\.or\.kr$|bizinfo\.go\.kr$|k-startup\.go\.kr$/.test(domain);
+  return freeCollection.isOfficialDomain(url);
 }
 
 function scoreEvidence(title, summary) {
-  const text = `${title || ''} ${summary || ''}`;
-  let score = 10;
-  if (/\d/.test(text)) score += 20;
-  if (/\d+(?:\.\d+)?\s*(?:%|원|억원|조원|명|건|개|배|년|월|일)/.test(text)) score += 25;
-  if (/발표|공고|통계|조사|보고서|자료|공시/.test(text)) score += 20;
-  if ((summary || '').length >= 250) score += 15;
-  return Math.min(100, score);
+  return freeCollection.scoreEvidence(title, summary);
 }
 
 function scoreQuality(authority, evidence, publishedAt) {
-  const freshness = publishedAt && Date.now() - new Date(publishedAt).getTime() <= 7 * 86400000 ? 20 : 10;
-  return Math.min(100, Math.round(authority * 0.45 + evidence * 0.35 + freshness));
+  return freeCollection.scoreQuality(authority, evidence, publishedAt);
 }
 
 function eventFingerprint(title, publishedAt, category) {
-  const dateBucket = publishedAt ? publishedAt.slice(0, 10) : 'undated';
-  const normalizedTitle = cleanText(title)
-    .toLowerCase()
-    .replace(/[^0-9a-z가-힣\s]/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length > 1)
-    .slice(0, 12)
-    .sort()
-    .join(' ');
-  return createHash('sha256').update(`${category}|${dateBucket}|${normalizedTitle}`).digest('hex');
+  return freeCollection.eventFingerprint(title, publishedAt, category);
 }
 
 function titleSimilarity(left, right) {
-  const leftTokens = titleTokens(left);
-  const rightTokens = titleTokens(right);
-  if (leftTokens.size < 2 || rightTokens.size < 2) return 0;
-  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
-  if (intersection < 2) return 0;
-  return intersection / Math.min(leftTokens.size, rightTokens.size);
-}
-
-function titleTokens(value) {
-  const stopWords = new Set(['관련', '대한', '위한', '통해', '뉴스', '속보', '단독', '발표', '공개', '밝혀']);
-  return new Set(cleanText(value)
-    .toLowerCase()
-    .replace(/[^0-9a-z가-힣\s]/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length > 1 && !stopWords.has(token)));
+  return freeCollection.titleSimilarity(left, right);
 }
 
 function eventDate(value) {
-  const iso = toIsoOrNull(value);
-  return iso ? iso.slice(0, 10) : null;
+  return freeCollection.eventDate(value);
 }
 
 function dateDistanceDays(left, right) {
-  const leftTime = Date.parse(`${left}T00:00:00Z`);
-  const rightTime = Date.parse(`${right}T00:00:00Z`);
-  if (!Number.isFinite(leftTime) || !Number.isFinite(rightTime)) return Number.POSITIVE_INFINITY;
-  return Math.abs(leftTime - rightTime) / 86400000;
+  return freeCollection.dateDistanceDays(left, right);
 }
 
 function toIsoOrNull(value) {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  return freeCollection.toIsoOrNull(value);
 }
 
 function yyyymmddToIso(value) {
@@ -1145,7 +1165,7 @@ function extractSummary(text) {
 }
 
 function hostName(url) {
-  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'rss'; }
+  return freeCollection.hostName(url) || 'rss';
 }
 
 function requiredEnv(name) {

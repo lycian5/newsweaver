@@ -129,6 +129,9 @@
         <div class="grid grid-3">
           <div class="field"><label for="aiTone">문체</label><select id="aiTone"><option value="neutral">사실 중심</option><option value="explanatory">쉽게 설명</option><option value="brief">간결한 브리핑</option></select></div>
           <div class="field"><label for="aiLength">분량</label><select id="aiLength"><option value="standard">표준</option><option value="short">짧게</option><option value="long">상세하게</option></select></div>
+          <div class="field"><label for="aiTier">AI 처리 수준</label><select id="aiTier"><option value="basic">기본 작성</option><option value="advanced">고급 분석 · 필요 시만</option></select></div>
+        </div>
+        <div class="grid">
           <div class="field"><label for="aiInstructions">편집 지시</label><input id="aiInstructions" type="text" maxlength="1200" placeholder="예: 지원 대상과 신청 기한을 먼저 설명" /></div>
         </div>
         <div class="actions" style="margin-top:12px;">
@@ -341,7 +344,7 @@
       'category','additionalCategory1','additionalCategory2','reporterEmail','scheduledAt','title',
       'subtitle1','subtitle2','subtitle3','bodyHtml','thumbnailAlt','thumbnailCaption','thumbnailSource',
       'tags','sourceUrl','commentsEnabled','showOnMain','showAsHeadline','articleAd','shareNews','shareConsent',
-      'imageMode','imageBackground','editorialNotes','aiTone','aiLength','aiInstructions'
+      'imageMode','imageBackground','editorialNotes','aiTone','aiLength','aiTier','aiInstructions'
     ];
     let sourceImage = null;
     let latestImageAsset = null;
@@ -385,7 +388,7 @@
         title:'', subtitle1:'', subtitle2:'', subtitle3:'', bodyHtml:'', thumbnailAlt:'', thumbnailCaption:'',
         thumbnailSource:'', tags:'', sourceUrl:'', commentsEnabled:false, showOnMain:false, showAsHeadline:false,
         articleAd:false, shareNews:false, shareConsent:false, imageMode:'cover', imageBackground:'#ffffff',
-        editorialNotes:'', aiTone:'neutral', aiLength:'standard', aiInstructions:''
+        editorialNotes:'', aiTone:'neutral', aiLength:'standard', aiTier:'basic', aiInstructions:''
       };
     }
 
@@ -796,7 +799,7 @@
       try {
         const result = await api('POST', {
           action:'ai_generate', id:currentDraftId, scope,
-          tone:$('aiTone').value, length:$('aiLength').value, instructions:$('aiInstructions').value.trim(), draft:aiSnapshot(),
+          tone:$('aiTone').value, length:$('aiLength').value, tier:$('aiTier').value, instructions:$('aiInstructions').value.trim(), draft:aiSnapshot(),
         });
         latestAiProposal = result.proposal;
         $('applyAiProposalButton').hidden = false;
@@ -804,7 +807,8 @@
         $('aiProposalSummary').textContent = result.proposal.summary || result.proposal.title || '생성된 제안입니다.';
         renderAiChecks(result.review);
         $('aiProposal').hidden = false;
-        setAiStatus(`${result.model}으로 제안을 만들었습니다. 내용을 확인한 뒤 적용하세요.`);
+        const cost = Number(result.usage?.estimated_cost_usd || 0);
+        setAiStatus(`${result.provider || 'openai'} / ${result.model} ${result.tier === 'advanced' ? '고급 분석' : '기본 작성'}으로 제안을 만들었습니다.${cost ? ` 예상 비용 $${cost.toFixed(4)}` : ''} 내용을 확인한 뒤 적용하세요.`);
       } catch (error) {
         setAiStatus(error.message, true);
         showToast(error.message, true);

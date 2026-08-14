@@ -31,9 +31,18 @@ create table if not exists raw_articles (
   evidence_score smallint not null default 0 check (evidence_score between 0 and 100),
   quality_score smallint not null default 0 check (quality_score between 0 and 100),
   verification_status text not null default 'unverified' check (verification_status in ('unverified', 'needs_verification', 'verified', 'rejected')),
+  source_grade text check (source_grade in ('A', 'B', 'C', 'D')),
   query_stage text not null default 'explore' check (query_stage in ('explore', 'precision', 'verification')),
   source_layer text not null default 'signal' check (source_layer in ('signal', 'official', 'data')),
   event_fingerprint text,
+  normalized_title text,
+  url_hash text,
+  title_hash text,
+  content_fingerprint text,
+  discovery_channel text,
+  publisher_name text,
+  cluster_match_method text check (cluster_match_method in ('created', 'fingerprint', 'title_date')),
+  cluster_match_score numeric(5,4) check (cluster_match_score between 0 and 1),
   last_checked_at timestamptz not null default now()
 );
 
@@ -44,8 +53,13 @@ create index if not exists raw_articles_canonical_url_idx on raw_articles(canoni
 create index if not exists raw_articles_event_fingerprint_idx on raw_articles(event_fingerprint);
 create index if not exists raw_articles_quality_score_idx on raw_articles(quality_score desc);
 create index if not exists raw_articles_verification_status_idx on raw_articles(verification_status);
+create index if not exists raw_articles_source_grade_idx on raw_articles(source_grade, collected_at desc);
 create index if not exists raw_articles_query_stage_idx on raw_articles(query_stage);
 create index if not exists raw_articles_source_layer_idx on raw_articles(source_layer);
+create index if not exists raw_articles_url_hash_idx on raw_articles(url_hash);
+create index if not exists raw_articles_title_hash_idx on raw_articles(title_hash);
+create index if not exists raw_articles_content_fingerprint_idx on raw_articles(content_fingerprint);
+create index if not exists raw_articles_normalized_title_idx on raw_articles(normalized_title);
 
 create table if not exists event_clusters (
   id bigint generated always as identity primary key,
@@ -59,6 +73,9 @@ create table if not exists event_clusters (
   official_source_count int not null default 0,
   independent_source_count int not null default 0 check (independent_source_count >= 0),
   editorial_state text not null default 'unreviewed' check (editorial_state in ('unreviewed', 'reviewing', 'held', 'prepared')),
+  validation_stage text not null default 'reviewable' check (validation_stage in ('blocked', 'reviewable', 'ready')),
+  validation_checked_at timestamptz,
+  validation_snapshot jsonb not null default '{}'::jsonb,
   status text not null default 'developing' check (status in ('developing', 'ready', 'archived'))
 );
 
@@ -109,6 +126,8 @@ alter table event_clusters
 
 create index if not exists event_clusters_editorial_state_idx
   on event_clusters(editorial_state, last_seen_at desc);
+create index if not exists event_clusters_validation_stage_idx
+  on event_clusters(validation_stage, last_seen_at desc);
 
 create table if not exists topic_suggestions (
   id bigint generated always as identity primary key,
@@ -127,6 +146,32 @@ create table if not exists topic_suggestions (
 create index if not exists topic_suggestions_date_idx on topic_suggestions(suggested_date);
 
 create index if not exists tracked_keywords_category_status_idx on tracked_keywords(category, status);
+
+create table if not exists collection_runs (
+  id uuid primary key,
+  collector text not null,
+  trigger text not null default 'manual',
+  status text not null default 'running' check (status in ('running', 'succeeded', 'partial', 'failed')),
+  sources text[] not null default '{}',
+  keywords_processed int not null default 0 check (keywords_processed >= 0),
+  discovered_count int not null default 0 check (discovered_count >= 0),
+  normalized_count int not null default 0 check (normalized_count >= 0),
+  unique_count int not null default 0 check (unique_count >= 0),
+  stored_count int not null default 0 check (stored_count >= 0),
+  clustered_article_count int not null default 0 check (clustered_article_count >= 0),
+  clusters_created_count int not null default 0 check (clusters_created_count >= 0),
+  clusters_updated_count int not null default 0 check (clusters_updated_count >= 0),
+  ready_brief_count int not null default 0 check (ready_brief_count >= 0),
+  fact_count int not null default 0 check (fact_count >= 0),
+  rejection_counts jsonb not null default '{}'::jsonb,
+  source_failures jsonb not null default '[]'::jsonb,
+  started_at timestamptz not null default now(),
+  completed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists collection_runs_started_at_idx on collection_runs(started_at desc);
+create index if not exists collection_runs_status_idx on collection_runs(status, started_at desc);
 
 create table if not exists collection_schedules (
   key text primary key check (key = 'agent_reach'),

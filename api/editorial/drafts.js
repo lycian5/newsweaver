@@ -1,13 +1,14 @@
 const { getSupabase } = require('../../lib/supabase');
 const { getOpenAI } = require('../../lib/openai');
-const { resolveOpenAIImageModel, resolveOpenAIModel } = require('../../lib/openaiModels');
+const { resolveOpenAIImageModel } = require('../../lib/openaiModels');
 const {
   buildEvidence,
   buildImagePrompt,
-  generateEditorialArticle,
   reviewDraftEvidence,
   sanitizeArticleHtml,
 } = require('../../lib/editorialAi');
+const { generateEditorialProposal, resolveEditorialAiRoute } = require('../../lib/editorialAiProvider');
+const { recordAiUsage, reserveAiBudget } = require('../../lib/editorialAiBudget');
 const {
   assertCronAuth,
   clearDashboardSessionCookie,
@@ -17,6 +18,11 @@ const {
 } = require('../../lib/cronAuth');
 const { selectCollectionKeywords } = require('../../scripts/keyword-selection');
 const { selectRisingKeywords } = require('../../scripts/rising-keywords');
+const {
+  gradeSource,
+  sourceGradeRank,
+  validateBriefForPreparation: evaluateBriefPolicy,
+} = require('../../lib/editorialPolicy');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -41,7 +47,7 @@ module.exports = async (req, res) => {
     res.status(405).json({ error: 'Method not allowed' });
   } catch (err) {
     console.error('[editorial/drafts]', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(err.statusCode || 500).json({ error: err.message });
   }
 };
 
@@ -130,7 +136,7 @@ async function listBriefs(req, res) {
   const ids = (clusters || []).map((item) => item.id);
   if (!ids.length) return res.status(200).json({ briefs: [], metrics: emptyBriefMetrics(), collection: collectionHealth([]) });
   const [{ data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
-    supabase.from('raw_articles').select('event_cluster_id,url,published_at,source_domain,source_type,source_layer,quality_score,verification_status').in('event_cluster_id', ids),
+    supabase.from('raw_articles').select('event_cluster_id,url,published_at,source_domain,source_type,source_layer,authority_score,quality_score,verification_status').in('event_cluster_id', ids),
     supabase.from('article_facts').select('event_cluster_id,fact_type,is_official').in('event_cluster_id', ids),
   ]);
   if (articleError) throw articleError;
@@ -151,7 +157,7 @@ async function getBrief(req, res) {
   const supabase = getSupabase();
   const [{ data: cluster, error: clusterError }, { data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
     supabase.from('event_clusters').select('*').eq('id', clusterId).single(),
-    supabase.from('raw_articles').select('id,event_cluster_id,title,url,summary,published_at,collected_at,source,source_domain,source_type,source_layer,query_stage,quality_score,verification_status').eq('event_cluster_id', clusterId),
+    supabase.from('raw_articles').select('id,event_cluster_id,title,url,summary,published_at,collected_at,source,source_domain,source_type,source_layer,query_stage,authority_score,quality_score,verification_status').eq('event_cluster_id', clusterId),
     supabase.from('article_facts').select('id,event_cluster_id,raw_article_id,fact_text,fact_type,source_url,is_official,confidence,verified_at,created_at').eq('event_cluster_id', clusterId).order('confidence', { ascending: false }),
   ]);
   if (clusterError) throw clusterError;
@@ -227,7 +233,7 @@ async function prepareArticleDraft(req, res) {
   const supabase = getSupabase();
   const [{ data: cluster, error: clusterError }, { data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
     supabase.from('event_clusters').select('*').eq('id', clusterId).single(),
-    supabase.from('raw_articles').select('title,url,summary,source_domain,source_type,quality_score,verification_status').eq('event_cluster_id', clusterId).order('quality_score', { ascending: false }),
+    supabase.from('raw_articles').select('title,url,summary,published_at,source_domain,source_type,source_layer,authority_score,quality_score,verification_status').eq('event_cluster_id', clusterId).order('quality_score', { ascending: false }),
     supabase.from('article_facts').select('fact_text,fact_type,source_url,is_official,confidence').eq('event_cluster_id', clusterId).order('confidence', { ascending: false }),
   ]);
   if (clusterError) throw clusterError;
@@ -240,7 +246,7 @@ async function prepareArticleDraft(req, res) {
     return res.status(409).json({ error: '이미 기사 초안으로 전환된 브리프입니다.', draftId: cluster.prepared_draft_id });
   }
   const validation = validateBriefForPreparation(cluster, articles, facts);
-  if (!validation.ready) return res.status(409).json({ error: validation.blockers[0], validation });
+  if (!validation.can_prepare) return res.status(409).json({ error: validation.blockers[0], validation });
 
   const starter = buildArticleStarter(cluster, articles, facts);
   const row = {
@@ -383,21 +389,30 @@ async function generateDraftWithAi(req, res) {
   const { draft, cluster, articles, facts } = await loadDraftAiContext(supabase, id);
   if (!['draft', 'rejected'].includes(draft.status)) return res.status(409).json({ error: '검토 대기 또는 승인된 초안은 AI로 수정할 수 없습니다.' });
   const validation = validateBriefForPreparation(cluster, articles, facts);
-  if (!validation.ready) return res.status(409).json({ error: validation.blockers[0], validation });
+  if (!validation.can_prepare) return res.status(409).json({ error: validation.blockers[0], validation });
 
   const currentDraft = requestedDraftSnapshot(req.body?.draft, draft);
   const context = buildEvidence(cluster, articles, facts);
-  const model = resolveOpenAIModel('draft', req.body?.model);
-  const proposal = await generateEditorialArticle(getOpenAI(), model, context, {
-    scope: req.body?.scope,
-    tone: req.body?.tone,
-    length: req.body?.length,
-    instructions: req.body?.instructions,
-    currentDraft,
-  });
+  const route = resolveEditorialAiRoute({ tier: req.body?.tier, requestedModel: req.body?.model });
+  const scope = String(req.body?.scope || 'full').slice(0, 40);
+  const reserved = await reserveAiBudget(supabase, { draftId: id, route, context, scope });
+  let proposal;
+  let usage;
+  try {
+    ({ proposal, usage } = await generateEditorialProposal(route, context, {
+      scope,
+      tone: req.body?.tone,
+      length: req.body?.length,
+      instructions: req.body?.instructions,
+      currentDraft,
+    }));
+  } catch (err) {
+    await recordAiUsage(supabase, { draftId: id, route, scope, reserved, status: 'failed', errorMessage: err.message });
+    throw err;
+  }
   const review = reviewDraftEvidence(proposal, context.urls);
   const prompt = String(req.body?.instructions || '').trim().slice(0, 1200);
-  const { error } = await supabase.from('editorial_draft_versions').insert({
+  await insertAiDraftVersion(supabase, {
     draft_id: id,
     action: `ai_${String(req.body?.scope || 'full').slice(0, 40)}`,
     title: proposal.title || draft.title,
@@ -405,11 +420,16 @@ async function generateDraftWithAi(req, res) {
     summary: proposal.summary,
     body_html: proposal.body_html || draft.body_html,
     tags: proposal.tags,
-    model,
+    model: route.model,
+    provider: route.provider,
+    tier: route.tier,
+    input_tokens: Number(usage?.input_tokens || reserved.input_tokens || 0),
+    output_tokens: Number(usage?.output_tokens || reserved.output_tokens || 0),
+    estimated_cost_usd: reserved.estimated_cost_usd,
     prompt,
     validation: review,
   });
-  if (error) throw error;
+  const usageEvent = await recordAiUsage(supabase, { draftId: id, route, scope, reserved, usage, status: 'succeeded' });
   const { error: draftError } = await supabase.from('editorial_drafts').update({
     ai_prompt: prompt || null,
     ai_generated_at: new Date().toISOString(),
@@ -418,7 +438,21 @@ async function generateDraftWithAi(req, res) {
     updated_at: new Date().toISOString(),
   }).eq('id', id);
   if (draftError) throw draftError;
-  return res.status(200).json({ proposal, model, validation, review });
+  return res.status(200).json({ proposal, model: route.model, provider: route.provider, tier: route.tier, usage: usageEvent, validation, review });
+}
+
+async function insertAiDraftVersion(supabase, version) {
+  let { error } = await supabase.from('editorial_draft_versions').insert(version);
+  if (!error) return;
+  if (!/provider|tier|input_tokens|output_tokens|estimated_cost_usd/i.test(String(error.message || ''))) throw error;
+  const legacy = { ...version };
+  delete legacy.provider;
+  delete legacy.tier;
+  delete legacy.input_tokens;
+  delete legacy.output_tokens;
+  delete legacy.estimated_cost_usd;
+  ({ error } = await supabase.from('editorial_draft_versions').insert(legacy));
+  if (error) throw error;
 }
 
 async function verifyDraftEvidence(req, res) {
@@ -495,7 +529,7 @@ async function loadDraftAiContext(supabase, id) {
   if (draftError) throw draftError;
   const [{ data: cluster, error: clusterError }, { data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
     supabase.from('event_clusters').select('*').eq('id', draft.event_cluster_id).single(),
-    supabase.from('raw_articles').select('title,url,summary,published_at,source,source_domain,source_type,quality_score,verification_status').eq('event_cluster_id', draft.event_cluster_id).order('quality_score', { ascending: false }),
+    supabase.from('raw_articles').select('title,url,summary,published_at,source,source_domain,source_type,source_layer,authority_score,quality_score,verification_status').eq('event_cluster_id', draft.event_cluster_id).order('quality_score', { ascending: false }),
     supabase.from('article_facts').select('fact_text,fact_type,source_url,is_official,confidence').eq('event_cluster_id', draft.event_cluster_id).order('confidence', { ascending: false }),
   ]);
   if (clusterError) throw clusterError;
@@ -534,45 +568,7 @@ async function attachDraftAssets(supabase, drafts) {
 }
 
 function validateBriefForPreparation(cluster, articles, facts) {
-  const blockers = [];
-  const warnings = [];
-  const independentSources = independentSourceCount(articles);
-  const factTypes = new Set((facts || []).map((fact) => fact.fact_type));
-  const isPolicyBrief = cluster?.category === 'policy';
-  const isFresh = isWithinHours(cluster?.last_seen_at, 24);
-  if (!cluster?.representative_title?.trim()) blockers.push('대표 제목이 없어 기사 초안을 준비할 수 없습니다.');
-  if (!articles?.length) blockers.push('근거 기사가 없어 기사 초안을 준비할 수 없습니다.');
-  if (articles?.length && !articles.some((article) => article.url)) blockers.push('사용 가능한 근거 기사 URL이 없습니다.');
-  const hasVerifiedSource = articles?.some((article) => article.verification_status === 'verified');
-  const hasOfficialSource = Number(cluster?.official_source_count || 0) > 0 || articles?.some((article) => article.source_type === 'official');
-  const hasPolicyDate = Boolean(cluster?.event_date) || articles?.some((article) => article.published_at);
-  if (!hasVerifiedSource && !hasOfficialSource) blockers.push('공식 또는 검증된 출처가 한 건 이상 필요합니다.');
-  if (!isPolicyBrief && independentSources < 2) blockers.push('독립 발행처가 두 곳 이상 필요합니다.');
-  if (isPolicyBrief && !hasPolicyDate) blockers.push('정책·지원사업은 공식 원문의 발행일 또는 공고일이 필요합니다.');
-  if (!facts?.length && !isPolicyBrief) warnings.push('구조화된 확인 사실이 없습니다. 원문에서 날짜·기관·수치를 다시 확인하세요.');
-  if (isPolicyBrief && !factTypes.has('date') && !factTypes.has('organization')) warnings.push('정책·지원사업의 날짜·기관은 공식 원문에서 확인하세요.');
-  if (!isPolicyBrief && (!factTypes.has('date') || !factTypes.has('organization') || !factTypes.has('number'))) warnings.push('날짜·기관·수치 사실이 모두 확보되지 않았습니다.');
-  if (!hasOfficialSource) warnings.push('공식 출처가 없습니다. 인용 범위와 사실관계를 추가 검토하세요.');
-  if (!isFresh) warnings.push('최근 24시간 안에 근거가 갱신되지 않았습니다. 최신성을 다시 확인하세요.');
-  return {
-    ready: blockers.length === 0,
-    checked_at: new Date().toISOString(),
-    is_policy: isPolicyBrief,
-    blockers,
-    warnings,
-    checks: {
-      title: Boolean(cluster?.representative_title?.trim()),
-      evidence: Boolean(articles?.length),
-      source_url: Boolean(articles?.some((article) => article.url)),
-      verified_source: Boolean(hasVerifiedSource || hasOfficialSource),
-      structured_facts: Boolean(facts?.length),
-      independent_sources: independentSources >= 2,
-      key_facts: isPolicyBrief
-        ? hasPolicyDate && hasOfficialSource
-        : factTypes.has('date') && factTypes.has('organization') && factTypes.has('number'),
-      fresh: isFresh,
-    },
-  };
+  return evaluateBriefPolicy(cluster, articles || [], facts || []);
 }
 
 function buildArticleStarter(cluster, articles, facts) {
@@ -621,9 +617,17 @@ function summarizeBrief(cluster, articles, facts) {
     numeric_fact_count: facts.filter((fact) => fact.fact_type === 'number').length,
     source_layers: sourceLayers,
     max_quality_score: maxQuality,
-    preparation_ready: validation.ready,
-    blocker: validation.blockers[0] || null,
-    system_status: validation.ready ? 'ready' : cluster.status === 'archived' ? 'archived' : 'needs_verification',
+    preparation_ready: validation.can_prepare,
+    validation_stage: validation.stage,
+    source_grades: validation.source_grades,
+    blocker: validation.blockers[0] || validation.warnings[0] || null,
+    system_status: cluster.status === 'archived'
+      ? 'archived'
+      : validation.stage === 'ready'
+        ? 'ready'
+        : validation.stage === 'reviewable'
+          ? 'reviewable'
+          : 'needs_verification',
   };
 }
 
@@ -632,21 +636,15 @@ function independentSourceCount(articles) {
 }
 
 function sortEvidence(articles) {
-  return [...articles].sort((left, right) => {
-    const leftRank = sourceRank(left);
-    const rightRank = sourceRank(right);
+  return [...articles].map((article) => ({ ...article, source_grade: gradeSource(article) })).sort((left, right) => {
+    const leftRank = sourceGradeRank(left);
+    const rightRank = sourceGradeRank(right);
     if (rightRank !== leftRank) return rightRank - leftRank;
     if (Number(right.quality_score || 0) !== Number(left.quality_score || 0)) {
       return Number(right.quality_score || 0) - Number(left.quality_score || 0);
     }
     return Date.parse(right.published_at || right.collected_at || 0) - Date.parse(left.published_at || left.collected_at || 0);
   });
-}
-
-function sourceRank(article) {
-  if (article.source_type === 'official') return 3;
-  if (article.verification_status === 'verified') return 2;
-  return 1;
 }
 
 function sortBriefs(briefs, sort) {
@@ -690,11 +688,6 @@ function collectionHealth(clusters) {
     last_updated_at: lastUpdatedAt,
     status: ageHours <= 2 ? 'normal' : ageHours <= 24 ? 'delayed' : 'stale',
   };
-}
-
-function isWithinHours(value, hours) {
-  const time = Date.parse(value || '');
-  return Number.isFinite(time) && Date.now() - time <= hours * 3600000;
 }
 
 function validateArticleDraft(draft) {

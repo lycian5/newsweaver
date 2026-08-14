@@ -6,6 +6,7 @@ __pycache__/
 .claude/
 .env
 node_modules/
+.pnpm-store/
 exports/*.json
 exports/*.jsonl
 exports/*.csv

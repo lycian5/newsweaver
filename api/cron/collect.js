@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto');
 const { getSupabase } = require('../../lib/supabase');
 const { assertCronAuth } = require('../../lib/cronAuth');
 const { searchNews } = require('../../lib/naver');
@@ -5,6 +6,7 @@ const { searchGoogleNews } = require('../../lib/googleNews');
 const { fetchPolicyNotices } = require('../../lib/policySources');
 const { fetchPublicDataNotices, getServiceKey } = require('../../lib/publicDataSources');
 const { selectCollectionKeywords } = require('../../scripts/keyword-selection');
+const { normalizeAndDedupe } = require('../../lib/freeCollection');
 
 function stripHtml(str) {
   return String(str || '')
@@ -51,6 +53,16 @@ module.exports = async (req, res) => {
 
   let articlesUpserted = 0;
   let keywordFailures = 0;
+  const runId = randomUUID();
+  const runStartedAt = new Date().toISOString();
+  const sourceFailures = [];
+  const funnel = {
+    discovered: 0,
+    normalized: 0,
+    unique: 0,
+    stored: 0,
+    rejection_counts: { invalid_url: 0, invalid_title: 0, duplicate_url: 0, duplicate_title: 0 },
+  };
   const { data: recentArticles, error: articleError } = await supabase
     .from('raw_articles')
     .select('keyword_id,category,collected_at,tracked_keywords(keyword)')
@@ -69,6 +81,19 @@ module.exports = async (req, res) => {
     date: new Date(),
   });
   const selectedKeywords = keywordSelection.selected;
+  const { error: runError } = await supabase.from('collection_runs').insert({
+    id: runId,
+    collector: 'vercel_cron',
+    trigger: 'cron',
+    status: 'running',
+    sources: ['naver_news', 'google_news', 'policy_notice', 'public_data'],
+    keywords_processed: selectedKeywords.length,
+    started_at: runStartedAt,
+  });
+  if (runError) {
+    res.status(500).json({ error: `collection_runs migration is required: ${runError.message}` });
+    return;
+  }
 
   for (const kw of selectedKeywords) {
     try {
@@ -89,9 +114,10 @@ module.exports = async (req, res) => {
           category: kw.category,
           source: 'naver_news',
           title: stripHtml(item.title),
-          url: item.link,
+          url: item.originallink || item.link,
           summary: stripHtml(item.description || ''),
           published_at: toIsoOrNull(item.pubDate),
+          discovery_channel: 'naver_news',
         })),
         ...googleItems.map((item) => ({
           keyword_id: kw.id,
@@ -101,16 +127,21 @@ module.exports = async (req, res) => {
           url: item.link,
           summary: null,
           published_at: toIsoOrNull(item.pubDate),
+          discovery_channel: 'google_news',
+          publisher_name: item.sourceName || null,
+          publisher_url: item.sourceUrl || null,
         })),
       ];
 
-      if (rows.length) {
+      const normalized = addToFunnel(funnel, rows);
+      if (normalized.length) {
         const { error: upsertError } = await supabase
           .from('raw_articles')
-          .upsert(rows, { onConflict: 'url', ignoreDuplicates: true });
+          .upsert(normalized, { onConflict: 'url', ignoreDuplicates: true });
         if (upsertError) throw upsertError;
 
-        articlesUpserted += rows.length;
+        articlesUpserted += normalized.length;
+        funnel.stored += normalized.length;
         await supabase
           .from('tracked_keywords')
           .update({ last_article_at: new Date().toISOString() })
@@ -118,6 +149,7 @@ module.exports = async (req, res) => {
       }
     } catch (err) {
       keywordFailures += 1;
+      sourceFailures.push({ source: 'keyword', keyword: kw.keyword, error: err.message });
       console.error(`[collect] "${kw.keyword}" 처리 실패:`, err.message);
     }
   }
@@ -135,14 +167,17 @@ module.exports = async (req, res) => {
       summary: null,
       published_at: null,
     }));
-    if (policyRows.length) {
+    const normalized = addToFunnel(funnel, policyRows);
+    if (normalized.length) {
       const { error: upsertError } = await supabase
         .from('raw_articles')
-        .upsert(policyRows, { onConflict: 'url', ignoreDuplicates: true });
+        .upsert(normalized, { onConflict: 'url', ignoreDuplicates: true });
       if (upsertError) throw upsertError;
-      policyNoticesUpserted = policyRows.length;
+      policyNoticesUpserted = normalized.length;
+      funnel.stored += normalized.length;
     }
   } catch (err) {
+    sourceFailures.push({ source: 'policy_notice', error: err.message });
     console.error('[collect] 정책 소스 수집 실패:', err.message);
   }
 
@@ -157,18 +192,37 @@ module.exports = async (req, res) => {
       summary: n.summary,
       published_at: n.published_at,
     }));
-    if (publicApiRows.length) {
+    const normalized = addToFunnel(funnel, publicApiRows);
+    if (normalized.length) {
       const { error: upsertError } = await supabase
         .from('raw_articles')
-        .upsert(publicApiRows, { onConflict: 'url', ignoreDuplicates: true });
+        .upsert(normalized, { onConflict: 'url', ignoreDuplicates: true });
       if (upsertError) throw upsertError;
-      publicApiNoticesUpserted = publicApiRows.length;
+      publicApiNoticesUpserted = normalized.length;
+      funnel.stored += normalized.length;
     }
   } catch (err) {
+    sourceFailures.push({ source: 'public_data', error: err.message });
     console.error('[collect] 공공데이터 API 수집 실패:', err.message);
   }
 
+  const status = sourceFailures.length ? 'partial' : 'succeeded';
+  const completedAt = new Date().toISOString();
+  const { error: finishError } = await supabase.from('collection_runs').update({
+    status,
+    completed_at: completedAt,
+    discovered_count: funnel.discovered,
+    normalized_count: funnel.normalized,
+    unique_count: funnel.unique,
+    stored_count: funnel.stored,
+    rejection_counts: funnel.rejection_counts,
+    source_failures: sourceFailures,
+  }).eq('id', runId);
+  if (finishError) console.error('[collect] collection run finalize failed:', finishError.message);
+
   res.status(200).json({
+    collectionRunId: runId,
+    status,
     keywordsProcessed: selectedKeywords.length,
     keywordFailures,
     articlesUpserted,
@@ -176,5 +230,18 @@ module.exports = async (req, res) => {
     publicApiConfigured: Boolean(getServiceKey()),
     publicApiNoticesUpserted,
     risingKeywordsApplied: keywordSelection.rising.length,
+    funnel,
+    completedAt,
   });
 };
+
+function addToFunnel(target, rows) {
+  const normalized = normalizeAndDedupe(rows);
+  target.discovered += normalized.funnel.discovered;
+  target.normalized += normalized.funnel.normalized;
+  target.unique += normalized.funnel.unique;
+  for (const [reason, count] of Object.entries(normalized.funnel.rejection_counts)) {
+    target.rejection_counts[reason] += count;
+  }
+  return normalized.rows;
+}

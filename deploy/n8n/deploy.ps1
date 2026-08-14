@@ -105,13 +105,14 @@ if ($PrepareOnly) {
 }
 
 Invoke-Step "Create remote directories" {
-    & ssh $RemoteHost "mkdir -p $RemoteDir/scripts $RemoteDir/workflows $RemoteDir/systemd"
+    & ssh $RemoteHost "mkdir -p $RemoteDir/scripts $RemoteDir/lib $RemoteDir/workflows $RemoteDir/systemd"
 }
 Invoke-Step "Upload deploy/n8n files" {
     & scp -r ./ "${RemoteHost}:${RemoteDir}/"
 }
 Invoke-Step "Upload Agent Reach scripts and workflows" {
-    & scp (Join-Path $ProjectDir "scripts\agent-reach-collect.js") (Join-Path $ProjectDir "scripts\agent-reach-runner.js") (Join-Path $ProjectDir "scripts\collection-notifications.js") (Join-Path $ProjectDir "scripts\keyword-selection.js") (Join-Path $ProjectDir "scripts\research-query-taxonomy.js") "${RemoteHost}:${RemoteDir}/scripts/"
+    & scp (Join-Path $ProjectDir "scripts\agent-reach-collect.js") (Join-Path $ProjectDir "scripts\agent-reach-runner.js") (Join-Path $ProjectDir "scripts\collection-notifications.js") (Join-Path $ProjectDir "scripts\keyword-selection.js") (Join-Path $ProjectDir "scripts\research-query-taxonomy.js") (Join-Path $ProjectDir "scripts\backfill-editorial-policy.js") "${RemoteHost}:${RemoteDir}/scripts/"
+    & scp (Join-Path $ProjectDir "lib\freeCollection.js") (Join-Path $ProjectDir "lib\editorialPolicy.js") "${RemoteHost}:${RemoteDir}/lib/"
     & scp (Join-Path $ProjectDir "n8n\workflow_agent_reach_collect.json") "${RemoteHost}:${RemoteDir}/workflows/"
 }
 
