@@ -32,7 +32,21 @@ assert.doesNotMatch(prepareRunnerCode, /fetch\(scheduleUrl\)/);
 assert.match(alignmentMigration, /daily_time set default '16:30'/);
 assert.match(alignmentMigration, /values \('agent_reach', true, '16:30'/);
 assert.match(dashboard, /\/api\/operations\/schedule/);
-assert.match(dashboard, /권장 일과 후 발행 흐름/);
+assert.match(dashboard, /자동운영 일정/);
+assert.match(dashboard, /07:10/);
+assert.match(dashboard, /09:00/);
 assert.match(dashboard, /16:30/);
+
+const vercel = JSON.parse(fs.readFileSync(require.resolve('../vercel.json'), 'utf8'));
+assert.deepEqual(vercel.crons.find((cron) => cron.path === '/api/cron/collect'), {
+  path: '/api/cron/collect', schedule: '10 22 * * *',
+});
+assert.deepEqual(vercel.crons.find((cron) => cron.path === '/api/cron/collect-recovery'), {
+  path: '/api/cron/collect-recovery', schedule: '0 0 * * *',
+});
+
+const recoveryEndpoint = fs.readFileSync(require.resolve('../api/cron/collect-recovery'), 'utf8');
+assert.match(recoveryEndpoint, /recoveryDecision/);
+assert.match(recoveryEndpoint, /previous_day_recovery/);
 
 process.stdout.write('Collection schedule checks passed.\n');

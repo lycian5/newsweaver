@@ -37,7 +37,7 @@ AGENT_REACH_REDDIT_RESULTS=5
 
 ## 수집 전략
 
-- Vercel 기본 수집은 Naver와 Google 중심으로 매일 18개 키워드를 처리합니다.
+- Vercel 전날 마감 수집은 Naver와 Google 중심으로 매일 18개 키워드의 전날 발행분을 처리하고, 09시대 조건부 작업이 실패·저수집만 보정합니다.
 - VPS Agent Reach는 Exa, 공식 기관, RSS를 중심으로 매일 54개 키워드를 처리합니다. RSS는 신뢰 가능한 기술·창업 피드를 기본으로 사용하며, `AGENT_REACH_JINA_ENRICH=true`일 때 원문 보강을 수행합니다.
 - 원시 수집에는 OpenAI를 사용하지 않습니다.
 - 중복 제거, 출처 평가, 점수화, 사건 클러스터링 후 최대 100개 브리프를 표시합니다.

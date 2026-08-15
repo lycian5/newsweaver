@@ -19,6 +19,7 @@
     "test:research-taxonomy": "node tests/test_research_query_taxonomy.js",
     "test:rising-keywords": "node tests/test_rising_keywords.js",
     "test:collection-schedule": "node tests/test_collection_schedule.js",
+    "test:collection-window": "node tests/test_collection_window.js",
     "test:research-briefs": "node tests/test_research_briefs.js",
     "test:editorial-workflow": "node tests/test_editorial_workflow.js",
     "test:editorial-ai": "node tests/test_editorial_ai.js",

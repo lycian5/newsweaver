@@ -5,7 +5,8 @@
   "cleanUrls": true,
   "trailingSlash": false,
   "crons": [
-    { "path": "/api/cron/collect", "schedule": "0 21 * * *" },
+    { "path": "/api/cron/collect", "schedule": "10 22 * * *" },
+    { "path": "/api/cron/collect-recovery", "schedule": "0 0 * * *" },
     { "path": "/api/cron/suggest", "schedule": "30 8 * * *" }
   ]
 }

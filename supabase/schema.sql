@@ -151,6 +151,11 @@ create table if not exists collection_runs (
   id uuid primary key,
   collector text not null,
   trigger text not null default 'manual',
+  collection_mode text,
+  target_date date,
+  window_start_at timestamptz,
+  window_end_at timestamptz,
+  recovery_reason text,
   status text not null default 'running' check (status in ('running', 'succeeded', 'partial', 'failed')),
   sources text[] not null default '{}',
   keywords_processed int not null default 0 check (keywords_processed >= 0),
@@ -172,6 +177,7 @@ create table if not exists collection_runs (
 
 create index if not exists collection_runs_started_at_idx on collection_runs(started_at desc);
 create index if not exists collection_runs_status_idx on collection_runs(status, started_at desc);
+create index if not exists collection_runs_mode_target_idx on collection_runs(collection_mode, target_date, started_at desc);
 
 create table if not exists collection_schedules (
   key text primary key check (key = 'agent_reach'),

@@ -7,6 +7,11 @@ const { fetchPolicyNotices } = require('../../lib/policySources');
 const { fetchPublicDataNotices, getServiceKey } = require('../../lib/publicDataSources');
 const { selectCollectionKeywords } = require('../../scripts/keyword-selection');
 const { normalizeAndDedupe } = require('../../lib/freeCollection');
+const {
+  buildCollectionWindow,
+  filterRowsForWindow,
+  normalizeCollectionMode,
+} = require('../../lib/collectionWindow');
 
 function stripHtml(str) {
   return String(str || '')
@@ -38,6 +43,15 @@ module.exports = async (req, res) => {
     return;
   }
 
+  const collectionMode = normalizeCollectionMode(req.query?.mode);
+  const collectionWindow = buildCollectionWindow({
+    mode: collectionMode,
+    targetDate: req.query?.targetDate,
+  });
+  const recoveryReason = collectionMode === 'previous_day_recovery'
+    ? String(req.query?.recoveryReason || '').slice(0, 240) || null
+    : null;
+
   const { data: keywords, error: kwError } = await supabase
     .from('tracked_keywords')
     .select('id, keyword, category, datalab_priority')
@@ -61,7 +75,15 @@ module.exports = async (req, res) => {
     normalized: 0,
     unique: 0,
     stored: 0,
-    rejection_counts: { invalid_url: 0, invalid_title: 0, duplicate_url: 0, duplicate_title: 0 },
+    rejection_counts: {
+      invalid_url: 0,
+      invalid_title: 0,
+      duplicate_url: 0,
+      duplicate_title: 0,
+      outside_window: 0,
+      missing_published_at: 0,
+    },
+    undated_included: 0,
   };
   const { data: recentArticles, error: articleError } = await supabase
     .from('raw_articles')
@@ -84,10 +106,15 @@ module.exports = async (req, res) => {
   const { error: runError } = await supabase.from('collection_runs').insert({
     id: runId,
     collector: 'vercel_cron',
-    trigger: 'cron',
+    trigger: collectionMode === 'previous_day_recovery' ? 'recovery' : 'cron',
     status: 'running',
     sources: ['naver_news', 'google_news', 'policy_notice', 'public_data'],
     keywords_processed: selectedKeywords.length,
+    collection_mode: collectionMode,
+    target_date: collectionWindow.targetDate,
+    window_start_at: collectionWindow.startAt,
+    window_end_at: collectionWindow.endAt,
+    recovery_reason: recoveryReason,
     started_at: runStartedAt,
   });
   if (runError) {
@@ -133,7 +160,7 @@ module.exports = async (req, res) => {
         })),
       ];
 
-      const normalized = addToFunnel(funnel, rows);
+      const normalized = addToFunnel(funnel, rows, collectionWindow);
       if (normalized.length) {
         const { error: upsertError } = await supabase
           .from('raw_articles')
@@ -167,7 +194,7 @@ module.exports = async (req, res) => {
       summary: null,
       published_at: null,
     }));
-    const normalized = addToFunnel(funnel, policyRows);
+    const normalized = addToFunnel(funnel, policyRows, collectionWindow, { includeUndated: true });
     if (normalized.length) {
       const { error: upsertError } = await supabase
         .from('raw_articles')
@@ -192,7 +219,7 @@ module.exports = async (req, res) => {
       summary: n.summary,
       published_at: n.published_at,
     }));
-    const normalized = addToFunnel(funnel, publicApiRows);
+    const normalized = addToFunnel(funnel, publicApiRows, collectionWindow, { includeUndated: true });
     if (normalized.length) {
       const { error: upsertError } = await supabase
         .from('raw_articles')
@@ -222,6 +249,12 @@ module.exports = async (req, res) => {
 
   res.status(200).json({
     collectionRunId: runId,
+    collectionMode,
+    targetDate: collectionWindow.targetDate,
+    collectionWindow: {
+      startAt: collectionWindow.startAt,
+      endAt: collectionWindow.endAt,
+    },
     status,
     keywordsProcessed: selectedKeywords.length,
     keywordFailures,
@@ -235,11 +268,15 @@ module.exports = async (req, res) => {
   });
 };
 
-function addToFunnel(target, rows) {
-  const normalized = normalizeAndDedupe(rows);
-  target.discovered += normalized.funnel.discovered;
+function addToFunnel(target, rows, window, options = {}) {
+  const filtered = filterRowsForWindow(rows, window, options);
+  const normalized = normalizeAndDedupe(filtered.rows);
+  target.discovered += (rows || []).length;
   target.normalized += normalized.funnel.normalized;
   target.unique += normalized.funnel.unique;
+  target.rejection_counts.outside_window += filtered.outsideWindow;
+  target.rejection_counts.missing_published_at += filtered.missingPublishedAt;
+  target.undated_included += filtered.undatedIncluded;
   for (const [reason, count] of Object.entries(normalized.funnel.rejection_counts)) {
     target.rejection_counts[reason] += count;
   }
