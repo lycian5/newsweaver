@@ -7,9 +7,12 @@ COA NEWS의 대량 기사 소재 수집, 중복 제거, 점수화, 리서치 검
 ## 운영 화면
 
 - 배포 URL: `https://newsweaver.vercel.app`
-- 수집 제어: `/vps-collector`
-- 리서치 브리프: `/research-briefs`
-- 등록용 기사 준비: `/coanews-draft`
+- 로그인: https://newsweaver.vercel.app/admin-login
+- 수집 운영: https://newsweaver.vercel.app/vps-collector
+- 리서치 브리프: https://newsweaver.vercel.app/research-briefs
+- 등록용 기사 준비: https://newsweaver.vercel.app/coanews-draft
+
+수집 운영은 오늘 자동 수집 상태를 먼저 보여 주고, 수동 재수집은 예외 작업입니다. 리서치 브리프는 오늘 작성 가능한 소재를 기본 큐로 엽니다.
 
 수집 제어, 리서치 브리프, 등록용 기사 준비는 하나의 관리자 세션을 사용합니다. Vercel Production에 다음 값을 설정합니다.
 
