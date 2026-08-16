@@ -7,6 +7,8 @@ assert.match(source, /body\?\.async === true/);
 assert.match(source, /accepted: true/);
 assert.match(source, /\.finally\(\(\) => \{ activeRun = null; \}\)/);
 assert.match(source, /notifyCollectionResult/);
+assert.match(source, /windowsHide: true/);
+assert.match(source, /stdio: \['ignore', 'pipe', 'pipe'\]/);
 assert.match(source, /Collection notification skipped/);
 assert.match(source, /isDryRun/);
 assert.match(source, /'reddit-results'/);

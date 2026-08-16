@@ -948,17 +948,12 @@ async function supabaseRequest(url, options = {}) {
 
 async function runCommand(command, commandArgs) {
   return new Promise((resolve, reject) => {
-    const child = process.platform === 'win32'
-      ? spawn([command, ...commandArgs].map(quoteWindowsArg).join(' '), {
-        shell: true,
-        windowsHide: true,
-        env: process.env,
-      })
-      : spawn(command, commandArgs, {
-        shell: false,
-        windowsHide: true,
-        env: process.env,
-      });
+    const child = spawn(command, commandArgs, {
+      shell: false,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: process.env,
+    });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => {
@@ -980,11 +975,7 @@ async function runCommand(command, commandArgs) {
   });
 }
 
-function quoteWindowsArg(value) {
-  const text = String(value);
-  if (/^[A-Za-z0-9_./:=@-]+$/.test(text)) return text;
-  return `"${text.replace(/(["\\])/g, '\\$1')}"`;
-}
+
 
 async function fetchWithTimeout(url, ms, options = {}) {
   const controller = new AbortController();

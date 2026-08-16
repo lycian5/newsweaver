@@ -32,7 +32,9 @@
     "test:ops-health": "node tests/test_ops_health.js",
     "test:dashboard-auth": "node tests/test_dashboard_auth.js",
     "collect:agent-reach": "node scripts/agent-reach-collect.js",
+    "collect:agent-reach:bg": "wscript //B //nologo scripts/run-hidden.vbs scripts/agent-reach-collect.js",
     "agent-reach:runner": "node scripts/agent-reach-runner.js",
+    "agent-reach:runner:bg": "wscript //B //nologo scripts/run-hidden.vbs scripts/agent-reach-runner.js",
     "backfill:editorial-policy": "node scripts/backfill-editorial-policy.js"
   },
   "dependencies": {

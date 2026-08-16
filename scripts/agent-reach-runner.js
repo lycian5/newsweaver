@@ -115,6 +115,7 @@ function runCollector(args) {
       cwd: repoRoot,
       env,
       windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdout = '';
     let stderr = '';
