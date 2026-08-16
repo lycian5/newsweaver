@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>수집 운영 목업 — COA NEWS</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #5f6f78;
+      --line: #dce4e8;
+      --bg: #f4f7f9;
+      --surface: #fff;
+      --blue: #087ea4;
+      --blue-dark: #066481;
+      --good: #087a43;
+      --good-bg: #e8f6ee;
+      --warn: #a15c00;
+      --warn-bg: #fff4dc;
+      --bad: #b42318;
+      --bad-bg: #fff0ee;
+      --chip: #e5f4f9;
+      --chip-ink: #075f7d;
+      --rising: #ffe1e8;
+      --rising-ink: #9c174d;
+      --rotating: #fff1d6;
+      --rotating-ink: #8a5200;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: Arial, "Noto Sans KR", sans-serif; }
+    a { color: inherit; }
+    .banner {
+      background: #111b22; color: #d9edf4; padding: 10px 20px; font-size: 13px;
+      display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    }
+    .banner a { color: #7dd3fc; font-weight: 700; }
+    .top { background: var(--blue); color: #fff; padding: 16px 24px; }
+    .top-in { max-width: 1080px; margin: 0 auto; display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .top h1 { font-size: 21px; margin: 0; }
+    .top p { margin: 5px 0 0; font-size: 13px; color: #d9f4fb; }
+    .nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .nav a, .nav button {
+      border: 1px solid rgba(255,255,255,.45); background: transparent; color: #fff;
+      padding: 8px 11px; border-radius: 6px; font-weight: 700; font-size: 13px; text-decoration: none; cursor: pointer;
+    }
+    .nav a.active { background: #fff; color: var(--blue); border-color: #fff; }
+    main { max-width: 1080px; margin: 20px auto 48px; padding: 0 16px; }
+    .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; margin-bottom: 14px; }
+    h2 { font-size: 16px; margin: 0 0 14px; }
+    .hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .status-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .stat {
+      border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: #f8fafb;
+    }
+    .stat.ok { background: var(--good-bg); border-color: #b7e4c7; }
+    .stat.skip { background: #f3f6f7; }
+    .stat.warn { background: var(--warn-bg); border-color: #f3d399; }
+    .stat .k { font-size: 12px; color: var(--muted); }
+    .stat strong { display: block; font-size: 22px; margin: 4px 0; }
+    .stat .meta { font-size: 12px; color: var(--ink); line-height: 1.45; }
+    .badge { display: inline-flex; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 99px; }
+    .badge.ok { background: #d8f3e3; color: var(--good); }
+    .badge.skip { background: #edf1f2; color: #4e5d66; }
+    .badge.warn { background: #ffe7b3; color: var(--warn); }
+    .next { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+    .btn { border: 0; border-radius: 6px; padding: 10px 14px; font-weight: 700; cursor: pointer; font: inherit; }
+    .primary { background: var(--blue); color: #fff; }
+    .ghost { background: #fff; color: #24313a; border: 1px solid #b9c8cf; }
+    .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .chip { padding: 6px 9px; border-radius: 4px; background: var(--chip); color: var(--chip-ink); font-size: 13px; font-weight: 700; }
+    .chip.rotating { background: var(--rotating); color: var(--rotating-ink); }
+    .chip.rising { background: var(--rising); color: var(--rising-ink); }
+    .groups { display: grid; grid-template-columns: 1.1fr 1.4fr .8fr; gap: 10px; }
+    .group { border: 1px solid var(--line); border-radius: 7px; padding: 12px; background: #f8fafb; }
+    .group h3 { margin: 0 0 8px; font-size: 13px; }
+    .timeline { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+    .step { border: 1px solid var(--line); border-radius: 7px; padding: 11px; background: #f8fafb; }
+    .step.editable { background: #f0f9ff; border-color: #bae6fd; }
+    .step strong { display: block; color: var(--chip-ink); font-size: 14px; }
+    .step span { display: block; margin-top: 5px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .lock { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .sched { display: grid; grid-template-columns: 220px 1fr; gap: 12px; align-items: end; margin-top: 12px; }
+    label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    input, textarea, select { width: 100%; border: 1px solid #bdcbd2; border-radius: 5px; padding: 10px; font: inherit; }
+    textarea { min-height: 84px; resize: vertical; }
+    .checks { display: flex; gap: 14px; flex-wrap: wrap; }
+    .checks label { font-weight: 500; margin: 0; display: flex; gap: 6px; align-items: center; }
+    .checks input { width: auto; }
+    details.exception { border: 1px dashed #b9c8cf; border-radius: 8px; padding: 0; background: #fff; }
+    details.exception > summary {
+      list-style: none; cursor: pointer; padding: 16px 18px; font-weight: 800; font-size: 15px;
+    }
+    details.exception > summary::-webkit-details-marker { display: none; }
+    details.exception .body { padding: 0 18px 18px; }
+    .warn-note { background: var(--warn-bg); color: #6b3f00; border-radius: 6px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .result { background: var(--good-bg); border: 1px solid #b7e4c7; border-radius: 7px; padding: 12px; font-size: 14px; }
+    .raw { margin-top: 10px; background: #111b22; color: #d9edf4; padding: 12px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; }
+    @media (max-width: 860px) {
+      .status-grid, .groups, .timeline, .grid, .sched { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 640px) {
+      .status-grid, .groups, .timeline, .grid, .sched { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <span>미리보기입니다. 실제 운영 화면은 아직 바뀌지 않았습니다.</span>
+    <span>
+      <a href="/vps-collector">현재 화면 열기</a>
+      ·
+      <a href="/vps-collector-compare">현재 화면과 나란히 보기</a>
+    </span>
+  </div>
+  <header class="top">
+    <div class="top-in">
+      <div>
+        <h1>수집 운영</h1>
+        <p>자동 수집 상태를 확인하고, 필요할 때만 예외 실행합니다.</p>
+      </div>
+      <nav class="nav">
+        <a class="active" href="/vps-collector-mockup">수집 운영</a>
+        <a href="/research-briefs">리서치 브리프</a>
+        <a href="/coanews-draft">기사 초안</a>
+        <button type="button">로그아웃</button>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>오늘 수집 상태 · 2026-08-16</h2>
+      <div class="status-grid">
+        <article class="stat ok">
+          <div class="k">07:10 주수집 <span class="badge ok">성공</span></div>
+          <strong>142건 저장</strong>
+          <div class="meta">Naver · Google · Bing · 국내 RSS<br />07:18 KST 완료 · 실패 없음</div>
+        </article>
+        <article class="stat skip">
+          <div class="k">09:00 보정 <span class="badge skip">건너뜀</span></div>
+          <strong>재수집 없음</strong>
+          <div class="meta">주수집이 정상이라 보정하지 않았습니다.</div>
+        </article>
+        <article class="stat ok">
+          <div class="k">16:30 Agent Reach <span class="badge ok">성공</span></div>
+          <strong>86건 보강</strong>
+          <div class="meta">Exa · 공식 · 국내·해외 RSS<br />16:41 KST 완료 · 브리프 19건</div>
+        </article>
+      </div>
+      <div class="next">
+        <p class="hint">자동화는 정상입니다. 다음 작업은 소재 선별입니다.</p>
+        <a class="btn primary" href="/research-briefs">리서치 브리프 열기</a>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>오늘 자동으로 돌 키워드</h2>
+      <div class="groups">
+        <div class="group">
+          <h3>핵심 12</h3>
+          <div class="chips">
+            <span class="chip">생성형 AI</span><span class="chip">AI 에이전트</span><span class="chip">챗GPT</span>
+            <span class="chip">소상공인</span><span class="chip">지원사업</span><span class="chip">창업</span>
+          </div>
+        </div>
+        <div class="group">
+          <h3>순환 42 · 날짜별 교체</h3>
+          <div class="chips">
+            <span class="chip rotating">배달 수수료</span><span class="chip rotating">전통시장</span>
+            <span class="chip rotating">정책자금</span><span class="chip rotating">업무 자동화</span>
+          </div>
+        </div>
+        <div class="group">
+          <h3>급상승 · 순환을 대체</h3>
+          <div class="chips">
+            <span class="chip rising">노란우산</span><span class="chip rising">폐업공제</span>
+          </div>
+        </div>
+      </div>
+      <p class="hint" style="margin:10px 0 0">읽기 전용입니다. 직접 키워드를 넣으면 아래 수동 실행에서만 쓰이며, 내일 자동 수집은 바뀌지 않습니다.</p>
+    </section>
+
+    <section class="panel">
+      <h2>하루 일정</h2>
+      <div class="timeline">
+        <div class="step"><strong>07:10</strong><span>전날 마감 수집</span><div class="lock">Vercel 고정</div></div>
+        <div class="step"><strong>09:00</strong><span>실패·저수집만 보정</span><div class="lock">Vercel 고정</div></div>
+        <div class="step editable"><strong>16:30</strong><span>Agent Reach 보강</span><div class="lock">이 화면에서 변경</div></div>
+        <div class="step"><strong>17:30</strong><span>브리프 검토</span><div class="lock">사람 작업</div></div>
+        <div class="step"><strong>18:00~</strong><span>선택 소재 초안</span><div class="lock">사람 작업</div></div>
+      </div>
+      <div class="sched">
+        <div>
+          <label for="scheduleTime">오후 보강 시각 (KST)</label>
+          <input id="scheduleTime" type="time" value="16:30" />
+        </div>
+        <div>
+          <label><input type="checkbox" checked style="width:auto" /> 자동 수집 사용</label>
+          <p class="hint">07:10·09:00은 여기서 바꾸지 않습니다. 저장 후 최대 5분 안에 n8n에 반영됩니다.</p>
+          <button class="btn primary" type="button" style="margin-top:8px">일정 저장</button>
+        </div>
+      </div>
+    </section>
+
+    <details class="exception panel" style="padding:0">
+      <summary>수동 재수집 · 오늘 자동 설정과 무관</summary>
+      <div class="body">
+        <div class="warn-note">여기서 바꾼 채널·결과 수·키워드는 이번 실행에만 적용됩니다. 16:30 자동 수집의 Exa 3건, RSS 8건 기본값은 유지됩니다.</div>
+        <div class="checks">
+          <label><input type="checkbox" checked /> Exa</label>
+          <label><input type="checkbox" checked /> 공식 출처</label>
+          <label><input type="checkbox" checked /> RSS</label>
+          <label><input type="checkbox" disabled /> YouTube · 미설정</label>
+          <label><input type="checkbox" disabled /> GitHub · 미설정</label>
+          <label><input type="checkbox" /> Reddit</label>
+        </div>
+        <div class="grid" style="margin-top:12px">
+          <div><label>처리할 키워드 수</label><input type="number" value="54" /></div>
+          <div><label>Exa 결과 수</label><input type="number" value="3" /></div>
+          <div><label>공식 출처 결과 수</label><input type="number" value="3" /></div>
+          <div><label>RSS 결과 수</label><input type="number" value="8" /></div>
+          <div><label>Reddit 결과 수</label><input type="number" value="5" /></div>
+        </div>
+        <div style="margin-top:12px">
+          <label for="keywords">직접 키워드 (선택)</label>
+          <textarea id="keywords" placeholder="비워 두면 오늘 자동 키워드를 사용합니다."></textarea>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+          <button class="btn primary" type="button">지금 한 번 실행</button>
+          <span class="hint">백그라운드 접수 후 상태 카드가 갱신됩니다.</span>
+        </div>
+        <div class="result" style="margin-top:14px">
+          접수됨 · 발견 210 · 저장 86 · 클러스터 24 · 실패 없음
+          <a href="/research-briefs" style="color:#066481;margin-left:8px;font-weight:700">브리프 보기</a>
+        </div>
+        <details>
+          <summary class="hint" style="margin-top:10px;cursor:pointer">JSON 상세</summary>
+          <div class="raw">{ "accepted": true, "stored": 86, "readyBriefs": 19 }</div>
+        </details>
+      </div>
+    </details>
+  </main>
+</body>
+</html>

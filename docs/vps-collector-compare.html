@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>수집 화면 비교 — COA NEWS</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; background: #111827; color: #e5e7eb; }
+    header { padding: 12px 16px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+    h1 { font-size: 16px; margin: 0; }
+    a { color: #7dd3fc; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; min-height: calc(100vh - 52px); }
+    .col { display: flex; flex-direction: column; border-top: 1px solid #374151; }
+    .col h2 { margin: 0; padding: 10px 12px; font-size: 13px; background: #1f2937; }
+    iframe { border: 0; width: 100%; flex: 1; background: #fff; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>왼쪽은 현재 운영 화면, 오른쪽은 자동화 우선 목업입니다.</h1>
+    <span>실제 `/vps-collector`는 아직 수정하지 않았습니다.</span>
+  </header>
+  <div class="grid">
+    <section class="col">
+      <h2>현재 · /vps-collector</h2>
+      <iframe src="/vps-collector" title="현재 수집 제어 화면"></iframe>
+    </section>
+    <section class="col">
+      <h2>제안 · /vps-collector-mockup</h2>
+      <iframe src="/vps-collector-mockup" title="수집 운영 목업"></iframe>
+    </section>
+  </div>
+</body>
+</html>
