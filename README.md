@@ -2,7 +2,7 @@
 
 COA NEWS의 대량 기사 소재 수집, 중복 제거, 점수화, 리서치 검증과 등록용 기사 초안 작업을 제공하는 운영 프로젝트입니다.
 
-운영 기준의 단일 원본은 [`docs/OPERATING_STANDARD.md`](docs/OPERATING_STANDARD.md)입니다.
+운영 기준의 단일 원본은 [`docs/OPERATING_STANDARD.md`](docs/OPERATING_STANDARD.md)입니다. 수집 현황을 빠르게 보려면 [`docs/REVIEW.md`](docs/REVIEW.md)를 봅니다.
 
 ## 운영 화면
 
@@ -37,8 +37,10 @@ AGENT_REACH_REDDIT_RESULTS=5
 
 ## 수집 전략
 
+- 주수집과 Agent Reach는 별도 수집입니다. 주수집 결과를 입력으로 재수집하지 않고, 같은 `raw_articles`에 합칩니다.
 - Vercel 전날 마감 수집은 Naver, Google, Bing 뉴스와 국내 언론 RSS를 중심으로 매일 18개 키워드의 전날 발행분을 처리하고, 09시대 조건부 작업이 실패·저수집만 보정합니다.
 - VPS Agent Reach는 Exa, 공식 기관, RSS를 중심으로 매일 54개 키워드를 처리합니다. RSS는 해외 기술·창업 피드와 국내 언론 피드를 함께 사용하며, `AGENT_REACH_JINA_ENRICH=true`일 때 원문 보강을 수행합니다.
+- 다음/카카오 RSS와 빅카인즈 API는 넣지 않았습니다. 이유와 점검 순서는 [`docs/REVIEW.md`](docs/REVIEW.md)에 있습니다.
 - 원시 수집에는 OpenAI를 사용하지 않습니다.
 - 중복 제거, 출처 평가, 점수화, 사건 클러스터링 후 최대 100개 브리프를 표시합니다.
 - 리서치 브리프에서 대표 제목, 근거 기사, 출처 URL, 공식·검증 출처를 확인한 뒤 기사 초안을 시작합니다.

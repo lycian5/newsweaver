@@ -1,5 +1,7 @@
 # COA NEWS 소재 수집 운영 기준
 
+상황 점검과 코드 리뷰는 [`REVIEW.md`](REVIEW.md)를 먼저 봅니다.
+
 ## 1. 목적
 
 ### 수집 분류와 검색 단계
@@ -43,6 +45,43 @@ YouTube와 GitHub는 인증 및 쿠키 상태가 검증된 뒤 선택적으로 �
 한 번의 Agent Reach 실행에서는 RSS 피드를 URL별로 한 번만 내려받아 모든 키워드에 재사용합니다. Exa와 공식 출처 검색은 키워드별로 실행하되 결과 수 상한을 적용합니다.
 
 Agent Reach 자동 수집 시간과 사용 여부는 `/vps-collector`의 `자동 수집 일정`에서 설정합니다. n8n은 5분마다 `collection_schedules`를 확인하며 설정한 KST 시각에만 실행합니다. 수동 실행은 이 일정과 무관합니다.
+
+### 3.1 현재 수집 출처
+
+주수집 키워드 검색:
+
+| 출처 | 모듈 | 비고 |
+|---|---|---|
+| Naver 뉴스 API | `lib/naver.js` | 키워드당 최신 검색 |
+| Google 뉴스 RSS | `lib/googleNews.js` | `hl=ko&gl=KR` |
+| Bing 뉴스 RSS | `lib/bingNews.js` | `ko-KR`, 추적 URL은 원문으로 변환 |
+
+주수집 보강:
+
+| 출처 | 모듈 | 비고 |
+|---|---|---|
+| 국내 언론 RSS 10곳 | `lib/koreanNewsRss.js` | 실행당 1회 수신 후 선택 키워드와 매칭 |
+| 정책 목록 페이지 | `lib/policySources.js` | 정책브리핑, 중기부, 고용부, 기업마당, 소진공, K-Startup |
+| 공공데이터 API | `lib/publicDataSources.js` | 기업마당, K-Startup |
+
+국내 언론 RSS 기본 목록은 연합뉴스, 한국경제 IT, 매일경제, 조선비즈, 전자신문, 뉴시스, 플래텀, 벤처스퀘어, 바이라인네트워크, 더피알입니다. Agent Reach는 같은 목록을 해외 기술·창업 RSS 뒤에 합칩니다.
+
+Agent Reach 공식 검색 도메인에는 기존 부처·지원기관에 공정위(`ftc.go.kr`), 통계청(`kosis.kr`, `kostat.go.kr`), 한은(`bok.or.kr`), 기재부(`moef.go.kr`)가 포함됩니다.
+
+사용하지 않는 후보:
+
+- 다음/카카오 뉴스 RSS: 공개 검색·섹션 RSS가 없어 넣지 않음
+- 빅카인즈 API: 신청·쿼터·비용 확인 전이라 넣지 않음
+
+### 3.2 출처 스위치
+
+| 환경변수 | 기본 | 위치 |
+|---|---|---|
+| `BASE_COLLECT_BING_NEWS` | 사용 | Vercel |
+| `BASE_COLLECT_KR_NEWS_RSS` | 사용 | Vercel |
+| `BASE_COLLECT_KR_NEWS_RSS_FEEDS` | 기본 10곳 | Vercel, 비어 있으면 기본 목록 |
+| `AGENT_REACH_KR_NEWS_RSS` | 사용 | VPS |
+| `AGENT_REACH_RSS_FEEDS` | 해외 기본 피드 | VPS, 값을 넣으면 해외 기본을 대체한 뒤 국내 피드를 합침 |
 
 ## 4. 점수와 선별 기준
 
@@ -96,4 +135,4 @@ Agent Reach 자동 수집 시간과 사용 여부는 `/vps-collector`의 `자동
 - VPS 배포·복원: `/deploy/n8n/README.md`
 - 데이터베이스 기준: `/supabase/schema.sql`과 `/supabase/migrations/`
 
-문서나 배포 파일이 서로 다르면 이 문서와 `deploy/n8n` 구성을 우선합니다.
+문서나 배포 파일이 서로 다르면 이 문서와 `deploy/n8n` 구성을 우선합니다. 수집 출처의 현재 구현을 빠르게 보려면 [`REVIEW.md`](REVIEW.md)를 봅니다.

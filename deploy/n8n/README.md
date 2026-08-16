@@ -54,8 +54,9 @@ ssh -L 5678:127.0.0.1:5678 root@158.247.245.66
 - 조건부 누락 보정: 매일 09:00 KST가 속한 시간대, 실패·부분 실패·저수집일 때만 재수집
 - VPS Agent Reach: 매일 16:30 KST, Exa, 공식 출처, 국내·해외 RSS, 54개 키워드
 - 소재 정리: 매일 17:30 KST, 중복 제거, 점수화, 클러스터 및 브리프 생성
-- AI는 원시 수집에 사용하지 않고 선택된 브리프의 200~1600자 맥락 요약에만 사용
+- 원시 수집에는 OpenAI를 사용하지 않습니다. AI는 기사 초안 보조와 근거 검증에만 씁니다.
 - `n8n/workflow_collect.json`과 `n8n/workflow_suggest.json`은 보관용이며 활성화하지 않음
+- 현재 출처와 점검 순서는 [`../../docs/REVIEW.md`](../../docs/REVIEW.md)를 봅니다.
 
 `workflow_agent_reach_collect.json`을 n8n에 import한 경우 환경변수를 확인한 뒤 이 워크플로를 활성 상태로 유지합니다.
 

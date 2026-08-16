@@ -7,6 +7,8 @@ const compose = fs.readFileSync(require.resolve('../deploy/n8n/docker-compose.ym
 const legacyCollect = JSON.parse(fs.readFileSync(require.resolve('../n8n/workflow_collect.json'), 'utf8'));
 const legacySuggest = JSON.parse(fs.readFileSync(require.resolve('../n8n/workflow_suggest.json'), 'utf8'));
 const standard = fs.readFileSync(require.resolve('../docs/OPERATING_STANDARD.md'), 'utf8');
+const review = fs.readFileSync(require.resolve('../docs/REVIEW.md'), 'utf8');
+const deployReadme = fs.readFileSync(require.resolve('../deploy/n8n/README.md'), 'utf8');
 
 assert.match(baseCollector, /BASE_COLLECT_LIMIT_KEYWORDS \|\| 18/);
 assert.match(baseCollector, /BASE_COLLECT_CORE_KEYWORDS \|\| 6/);
@@ -24,12 +26,18 @@ assert.match(agentCollector, /const rssFeedCache = new Map\(\)/);
 assert.match(agentCollector, /loadRssEntries\(feed\)/);
 assert.match(standard, /국내 언론 RSS/);
 assert.match(standard, /공정위·통계청·한은/);
+assert.match(standard, /3\.1 현재 수집 출처/);
+assert.match(review, /searchBingNews/);
+assert.match(review, /koreanNewsRss\.js/);
+assert.match(review, /다음\/카카오/);
+assert.match(review, /빅카인즈/);
 assert.match(compose, /n8nio\/n8n:\$\{N8N_VERSION:-2\.30\.7\}/);
 assert.equal(legacyCollect.active, false);
 assert.equal(legacySuggest.active, false);
 assert.match(standard, /리서치 검증 기준/);
 assert.match(standard, /등록용 기사 준비 화면으로 넘겨 실제 본문을 작성합니다/);
 assert.doesNotMatch(standard, /맥락 요약/);
+assert.doesNotMatch(deployReadme, /맥락 요약/);
 assert.match(standard, /원시 수집 단계에서는 OpenAI를 호출하지 않습니다/);
 
 process.stdout.write('Operating standard checks passed.\n');
