@@ -5,6 +5,7 @@ const page = fs.readFileSync(require.resolve('../docs/coanews-draft.html'), 'utf
 const schema = fs.readFileSync(require.resolve('../docs/coanews-draft.schema.json'), 'utf8');
 const migration = fs.readFileSync(require.resolve('../supabase/migrations/20260713_editorial_workflow.sql'), 'utf8');
 assert.match(api, /prepareArticleDraft/);
+assert.match(api, /mapPlatformCategory/);
 assert.match(api, /validateBriefForPreparation/);
 assert.match(api, /validateArticleDraft/);
 assert.match(api, /pending_editor_approval/);

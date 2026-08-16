@@ -23,6 +23,7 @@ const {
   sourceGradeRank,
   validateBriefForPreparation: evaluateBriefPolicy,
 } = require('../../lib/editorialPolicy');
+const { classificationFromDraft, mapPlatformCategory } = require('../../lib/platformCategories');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -318,7 +319,8 @@ async function listDrafts(req, res) {
   if (req.query?.status) query = query.eq('status', req.query.status);
   const { data, error } = await query;
   if (error) throw error;
-  res.status(200).json({ drafts: await attachDraftAssets(supabase, data || []) });
+  const drafts = await attachDraftAssets(supabase, data || []);
+  res.status(200).json({ drafts: await attachDraftClassification(supabase, drafts) });
 }
 
 async function prepareArticleDraft(req, res) {
@@ -343,17 +345,22 @@ async function prepareArticleDraft(req, res) {
   if (!validation.can_prepare) return res.status(409).json({ error: validation.blockers[0], validation });
 
   const starter = buildArticleStarter(cluster, articles, facts);
+  const classification = mapPlatformCategory(cluster.category);
   const row = {
     event_cluster_id: clusterId,
     title: starter.title,
     subtitle: null,
     summary: starter.summary,
     body_html: starter.bodyHtml,
-    tags: starter.tags,
+    tags: classification.tags,
+    platform_category_id: classification.category,
+    additional_category_1: classification.additionalCategory1 || null,
+    additional_category_2: classification.additionalCategory2 || null,
+    source_url: starter.primarySource.url || null,
     status: 'draft',
     model: null,
   };
-  const { data, error } = await supabase.from('editorial_drafts').insert(row).select().single();
+  const { data, error } = await insertEditorialDraft(supabase, row);
   if (error) throw error;
   const { error: clusterUpdateError } = await supabase
     .from('event_clusters')
@@ -369,6 +376,7 @@ async function prepareArticleDraft(req, res) {
       source_name: starter.primarySource.source_domain || 'COA NEWS 리서치',
       source_url: starter.primarySource.url || '',
       category: cluster.category,
+      classification,
       event_cluster_id: clusterId,
       draft_id: data.id,
       references: articles.map((article) => article.url).filter(Boolean),
@@ -445,6 +453,10 @@ async function updateDraft(req, res) {
       if (typeof req.body?.[input] === 'string') updates[column] = req.body[input];
     }
     if (Array.isArray(req.body?.tags)) updates.tags = req.body.tags.slice(0, 20);
+    if (typeof req.body?.platformCategoryId === 'string') updates.platform_category_id = req.body.platformCategoryId.trim().slice(0, 20) || null;
+    if (typeof req.body?.additionalCategory1 === 'string') updates.additional_category_1 = req.body.additionalCategory1.trim().slice(0, 20) || null;
+    if (typeof req.body?.additionalCategory2 === 'string') updates.additional_category_2 = req.body.additionalCategory2.trim().slice(0, 20) || null;
+    if (typeof req.body?.sourceUrl === 'string') updates.source_url = req.body.sourceUrl.trim().slice(0, 2000) || null;
     updates.status = 'draft';
   } else if (action === 'submit' && ['draft', 'rejected'].includes(current.status)) {
     const problems = validateArticleDraft(current);
@@ -459,7 +471,7 @@ async function updateDraft(req, res) {
   } else {
     return res.status(409).json({ error: `허용되지 않은 상태 전환입니다: ${current.status} -> ${action}` });
   }
-  const { data, error } = await supabase.from('editorial_drafts').update(updates).eq('id', id).select().single();
+  const { data, error } = await updateEditorialDraft(supabase, id, updates);
   if (error) throw error;
   if (action === 'save' && current.latest_image_asset_id) {
     const imageUpdates = {};
@@ -689,9 +701,51 @@ function buildArticleStarter(cluster, articles, facts) {
       '<h3>참고자료</h3>',
       `<ul>${referenceItems}</ul>`,
     ].join('\n'),
-    tags: categoryTags(cluster.category),
+    tags: mapPlatformCategory(cluster.category).tags,
     primarySource,
   };
+}
+
+async function updateEditorialDraft(supabase, id, updates) {
+  const updated = await supabase.from('editorial_drafts').update(updates).eq('id', id).select().single();
+  if (!updated.error || !/platform_category_id|additional_category_1|source_url/.test(updated.error.message || '')) {
+    return updated;
+  }
+  const fallback = { ...updates };
+  delete fallback.platform_category_id;
+  delete fallback.additional_category_1;
+  delete fallback.additional_category_2;
+  delete fallback.source_url;
+  return supabase.from('editorial_drafts').update(fallback).eq('id', id).select().single();
+}
+
+async function insertEditorialDraft(supabase, row) {
+  const inserted = await supabase.from('editorial_drafts').insert(row).select().single();
+  if (!inserted.error || !/platform_category_id|additional_category_1|source_url/.test(inserted.error.message || '')) {
+    return inserted;
+  }
+  const fallback = { ...row };
+  delete fallback.platform_category_id;
+  delete fallback.additional_category_1;
+  delete fallback.additional_category_2;
+  delete fallback.source_url;
+  return supabase.from('editorial_drafts').insert(fallback).select().single();
+}
+
+async function attachDraftClassification(supabase, drafts) {
+  const clusterIds = [...new Set(drafts.map((draft) => draft.event_cluster_id).filter(Boolean))];
+  const categories = new Map();
+  if (clusterIds.length) {
+    const { data, error } = await supabase.from('event_clusters').select('id,category').in('id', clusterIds);
+    if (!error) {
+      for (const cluster of data || []) categories.set(cluster.id, cluster.category);
+    }
+  }
+  return drafts.map((draft) => ({
+    ...draft,
+    cluster_category: categories.get(draft.event_cluster_id) || null,
+    classification: classificationFromDraft(draft, categories.get(draft.event_cluster_id)),
+  }));
 }
 
 function summarizeBrief(cluster, articles, facts) {
@@ -801,14 +855,6 @@ function htmlTextLength(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .length;
-}
-
-function categoryTags(category) {
-  return {
-    ai_business: ['AI', 'AI비즈니스'],
-    startup: ['창업', '부업'],
-    policy: ['소상공인', '정책지원'],
-  }[category] || [];
 }
 
 function escapeHtml(value) {

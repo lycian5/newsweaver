@@ -336,7 +336,17 @@
       { id:'18', name:'마케팅 / 유통' },
       { id:'25', name:'커뮤니티' },
     ];
-    const CATEGORY_DEFAULTS = { ai:'13', ai_business:'13', startup:'15', policy:'17', column:'14/26' };
+    const CLASSIFICATION_DEFAULTS = {
+      ai:{ category:'13', additionalCategory1:'16', additionalCategory2:'', tags:'AI, AI비즈니스' },
+      ai_business:{ category:'13', additionalCategory1:'16', additionalCategory2:'', tags:'AI, AI비즈니스' },
+      startup:{ category:'15', additionalCategory1:'', additionalCategory2:'', tags:'창업, 부업' },
+      policy:{ category:'17', additionalCategory1:'11', additionalCategory2:'', tags:'소상공인, 정책지원' },
+      small_business_economy:{ category:'17', additionalCategory1:'', additionalCategory2:'', tags:'소상공인' },
+      local_commerce:{ category:'12', additionalCategory1:'', additionalCategory2:'', tags:'지역상권, 전통시장' },
+      marketing_distribution:{ category:'18', additionalCategory1:'', additionalCategory2:'', tags:'마케팅, 유통' },
+      field_issue:{ category:'14', additionalCategory1:'', additionalCategory2:'', tags:'현장, 이슈' },
+      column:{ category:'14/26', additionalCategory1:'', additionalCategory2:'', tags:'칼럼, 인사이트' },
+    };
     const FORM_KEY = 'coa_news_draft_form_v1';
     const SEED_KEY = 'coa_news_draft_seed';
     const WORKFLOW_KEY = 'coa_news_article_workflow_v1';
@@ -392,16 +402,39 @@
       };
     }
 
+    function mapClassification(category, classification) {
+      const mapped = classification && classification.category
+        ? {
+            category: classification.category,
+            additionalCategory1: classification.additionalCategory1 || '',
+            additionalCategory2: classification.additionalCategory2 || '',
+            tags: Array.isArray(classification.tags) ? classification.tags.join(', ') : (classification.tags || ''),
+          }
+        : (CLASSIFICATION_DEFAULTS[category] || { category:'11', additionalCategory1:'', additionalCategory2:'', tags:'' });
+      return mapped;
+    }
+
+    function applyClassification(classification) {
+      if (!classification) return;
+      if (classification.category) $('category').value = classification.category;
+      $('additionalCategory1').value = classification.additionalCategory1 || '';
+      $('additionalCategory2').value = classification.additionalCategory2 || '';
+      if (classification.tags) $('tags').value = Array.isArray(classification.tags) ? classification.tags.join(', ') : classification.tags;
+      if (classification.sourceUrl) $('sourceUrl').value = classification.sourceUrl;
+    }
+
     function applySeed(seed) {
       const defaults = defaultFields();
-      defaults.category = CATEGORY_DEFAULTS[seed.category] || '11';
-      defaults.additionalCategory1 = ['ai', 'ai_business'].includes(seed.category) ? '16' : '';
+      const mapped = mapClassification(seed.category, seed.classification);
+      defaults.category = mapped.category;
+      defaults.additionalCategory1 = mapped.additionalCategory1;
+      defaults.additionalCategory2 = mapped.additionalCategory2;
       defaults.title = seed.title || '';
       defaults.sourceUrl = seed.source_url || '';
       defaults.bodyHtml = seed.summary
         ? `${escapeHtml(seed.summary)}\n\n참고자료: ${seed.source_url || ''}`
         : '';
-      defaults.tags = categoryTags(seed.category);
+      defaults.tags = mapped.tags;
       applyFields(defaults);
       currentDraftId = Number(seed.draft_id) || null;
       currentDraftStatus = 'draft';
@@ -412,7 +445,7 @@
     }
 
     function categoryTags(category) {
-      return { ai:'AI, AI비즈니스', ai_business:'AI, AI비즈니스', startup:'창업, 부업', policy:'소상공인, 정책지원', column:'칼럼, 인사이트' }[category] || '';
+      return (CLASSIFICATION_DEFAULTS[category] || {}).tags || '';
     }
 
     function getCategory(id) {
@@ -742,6 +775,8 @@
       $('bodyHtml').value = draft.body_html || '';
       $('tags').value = (draft.tags || []).join(', ');
       $('editorialNotes').value = draft.editorial_notes || '';
+      applyClassification(draft.classification || mapClassification(draft.cluster_category, null));
+      if (draft.source_url) $('sourceUrl').value = draft.source_url;
       latestImageAsset = draft.image_asset || null;
       if (draft.image_asset?.url) {
         $('thumbnailAlt').value = draft.image_asset.alt_text || $('thumbnailAlt').value;
@@ -763,6 +798,10 @@
         subtitle:$('subtitle1').value.trim(),
         bodyHtml:getBodyHtml(),
         tags:$('tags').value.split(',').map(value => value.trim()).filter(Boolean),
+        platformCategoryId:$('category').value,
+        additionalCategory1:$('additionalCategory1').value,
+        additionalCategory2:$('additionalCategory2').value,
+        sourceUrl:$('sourceUrl').value.trim(),
         editorialNotes:$('editorialNotes').value.trim(),
         thumbnailAlt:$('thumbnailAlt').value.trim(),
         thumbnailCaption:$('thumbnailCaption').value.trim(),
@@ -847,8 +886,6 @@
         if (proposal.source_url) $('sourceUrl').value = proposal.source_url;
         if (proposal.thumbnail_alt) $('thumbnailAlt').value = proposal.thumbnail_alt;
         if (proposal.thumbnail_caption) $('thumbnailCaption').value = proposal.thumbnail_caption;
-        const category = CATEGORY_DEFAULTS[proposal.category_recommendation];
-        if (category) $('category').value = category;
       }
       latestAiProposal = null;
       $('aiProposal').hidden = true;

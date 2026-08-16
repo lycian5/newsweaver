@@ -84,6 +84,7 @@ Agent Reach: Exa, 공식 도메인 검색, 해외 기술 RSS + 같은 국내 RSS
 | 수집 운영 화면 | `docs/vps-collector.html` |
 | 리서치 브리프 화면 | `docs/research-briefs.html` |
 | 기사 초안 화면 | `docs/coanews-draft.html` |
+| 플랫폼 분류 대응 | `lib/platformCategories.js` — 브리프 분류를 초안 칸에 저장. AI는 분류를 덮어쓰지 않음 |
 | VPS 배포 | `deploy/n8n/deploy.ps1` |
 
 공개 랜딩은 `docs/index.html`입니다. 관리자 운영 화면이 아닙니다.
