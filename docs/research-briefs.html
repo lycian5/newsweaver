@@ -278,13 +278,13 @@
       const digest = brief.digest || {};
       const sources = digest.sources || [];
       const visibleSources = showAllSources ? sources : sources.slice(0, 3);
-      const system = systemBadge({ ...brief, preparation_ready: validation.can_prepare, validation_stage: validation.stage });
       const decision = digest.decision || verdictCopy(validation);
+      const system = systemBadge({ ...brief, preparation_ready: decision.allowed, validation_stage: validation.stage === 'blocked' ? 'blocked' : decision.allowed ? 'ready' : 'reviewable', digest });
       $('detail').innerHTML = `
         <button class="btn secondary mobile-back" id="back" type="button">목록으로</button>
         <div class="eyebrow">${badge(label(brief.category),'blue')}${badge(system.label,system.kind)}${editorialBadges(brief)}${summaryReviewBadge(brief.aiReview)}<span>공식 출처 ${brief.official_source_count}</span><span>독립 발행처 ${brief.independent_source_count}</span><span>최근 갱신 ${relativeTime(brief.last_seen_at)}</span></div>
         <h2>${esc(digest.title || brief.representative_title)}</h2>
-        <div class="verdict ${validation.stage}">
+        <div class="verdict ${validation.stage === 'blocked' ? 'blocked' : decision.allowed ? 'ready' : 'reviewable'}">
           <h3>${esc(decision.label || verdictCopy(validation).title)}</h3>
           <p class="hint" style="margin:0">${esc(decision.reason || verdictCopy(validation).detail)}</p>
         </div>
@@ -318,7 +318,8 @@
     function historyHtml(item){ return `<div><strong>${esc(item.label)}</strong><span>${item.at?formatDate(item.at):'초안 화면에서 계속'}</span></div>`; }
     function primaryActions(brief, validation){
       if (brief.editorial_state === 'prepared' && brief.prepared_draft_id) return `<a class="btn" href="/coanews-draft?draft=${encodeURIComponent(brief.prepared_draft_id)}">기사 초안 열기</a>`;
-      if (validation.stage === 'ready') return `<button class="btn" id="prepare" type="button">바로 기사 작성</button>`;
+      if (brief.digest?.decision?.allowed) return `<button class="btn" id="prepare" type="button">바로 기사 작성</button>`;
+      if (brief.digest?.decision?.classified_by === 'ai') return '';
       if (brief.editorial_state === 'unreviewed') return '<button class="btn" id="startReview" type="button">검토 시작</button>';
       if (brief.editorial_state === 'held') return '<button class="btn" id="resumeReview" type="button">검토 재개</button>';
       return `<button class="btn" id="prepare" type="button" ${validation.can_prepare?'':'disabled'}>${validation.stage==='reviewable'?'검토 조건으로 기사 초안 준비':'검증 후 기사 초안 준비'}</button>`;
@@ -357,9 +358,16 @@
         const response = await CoaAuth.request('/api/editorial/drafts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'ai_verify_brief', eventClusterId: selectedBrief.id }) });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || '요약을 검증하지 못했습니다.');
-        selectedBrief = { ...selectedBrief, aiReview: data.review };
+        selectedBrief = {
+          ...selectedBrief,
+          aiReview: data.review,
+          digest: { ...selectedBrief.digest, decision: data.decision || selectedBrief.digest?.decision },
+          preparation_ready: Boolean(data.decision?.allowed),
+          validation_stage: data.decision?.allowed ? 'ready' : 'reviewable',
+        };
         renderDetail();
-        toast(data.review.verdict === 'supported' ? '요약 검증을 통과했습니다.' : '요약 확인이 필요합니다.');
+        toast(data.decision?.allowed ? '작성 가능으로 분류했습니다.' : '작성 보류로 분류했습니다.');
+        await loadBriefs(true);
       } catch (error) {
         button.disabled = false;
         button.textContent = '요약 AI 검증';
@@ -379,7 +387,7 @@
     async function prepareDraft(){
       const validation = selectedBrief.validation;
       if (!validation.can_prepare) return;
-      if (validation.stage !== 'ready' && validation.warnings.length && !confirm(`검토 경고가 ${validation.warnings.length}건 있습니다. 원문을 다시 확인하면서 기사 초안을 준비할까요?`)) return;
+      if (!selectedBrief.digest?.decision?.allowed) return;
       const button = $('prepare');
       button.disabled = true;
       button.textContent = '초안 준비 중';

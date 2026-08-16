@@ -24,7 +24,7 @@ const {
   validateBriefForPreparation: evaluateBriefPolicy,
 } = require('../../lib/editorialPolicy');
 const { classificationFromDraft, mapPlatformCategory } = require('../../lib/platformCategories');
-const { buildBriefDigest } = require('../../lib/briefDigest');
+const { applyReviewToDigest, buildBriefDigest, classifyAfterAiReview } = require('../../lib/briefDigest');
 const { attachStoredReview, summaryHash } = require('../../lib/briefSummaryReviewJob');
 
 module.exports = async (req, res) => {
@@ -265,6 +265,8 @@ async function getBrief(req, res) {
   const sortedArticles = sortEvidence(articles || []);
   const validation = validateBriefForPreparation(normalizedCluster, sortedArticles, facts || []);
   const digest = buildBriefDigest(normalizedCluster, sortedArticles, facts || [], validation);
+  const aiReview = attachStoredReview(normalizedCluster, digest);
+  applyReviewToDigest(digest, validation, sortedArticles, aiReview);
   res.status(200).json({
     brief: {
       ...normalizedCluster,
@@ -273,7 +275,7 @@ async function getBrief(req, res) {
       facts: facts || [],
       digest,
       validation,
-      aiReview: attachStoredReview(normalizedCluster, digest),
+      aiReview,
       history: [
         { type: 'collected', at: normalizedCluster.first_seen_at, label: '최초 수집' },
         { type: 'updated', at: normalizedCluster.last_seen_at, label: '최근 근거 갱신' },
@@ -349,8 +351,12 @@ async function prepareArticleDraft(req, res) {
   }
   const validation = validateBriefForPreparation(cluster, articles, facts);
   if (!validation.can_prepare) return res.status(409).json({ error: validation.blockers[0], validation });
-
   const digest = buildBriefDigest(cluster, articles, facts, validation);
+  const aiReview = attachStoredReview(cluster, digest);
+  applyReviewToDigest(digest, validation, articles, aiReview);
+  if (aiReview && aiReview.verdict !== 'supported') {
+    return res.status(409).json({ error: digest.decision.reason, validation, review: aiReview });
+  }
   const starter = buildArticleStarter(cluster, articles, facts, digest);
   const classification = mapPlatformCategory(cluster.category);
   const row = {
@@ -617,6 +623,7 @@ async function verifyBriefSummary(req, res) {
     });
     return res.status(200).json({
       review: stored,
+      decision: classifyAfterAiReview(validation, sortedArticles, stored),
       digest: { title: digest.title, summary: digest.summary },
       model: route.model,
       provider: route.provider,
@@ -829,30 +836,33 @@ function summarizeBrief(cluster, articles, facts) {
   };
   const validation = validateBriefForPreparation(normalizedCluster, articles, facts);
   const digest = buildBriefDigest(normalizedCluster, articles, facts, validation);
+  const aiReview = attachStoredReview(normalizedCluster, digest);
+  applyReviewToDigest(digest, validation, articles, aiReview);
   const sourceLayers = [...new Set(articles.map((article) => article.source_layer).filter(Boolean))];
   const maxQuality = articles.reduce((max, article) => Math.max(max, Number(article.quality_score || 0)), 0);
+  const stage = validation.stage === 'blocked' ? 'blocked' : digest.decision.allowed ? 'ready' : 'reviewable';
   return {
     ...normalizedCluster,
     fact_count: facts.length,
     numeric_fact_count: facts.filter((fact) => fact.fact_type === 'number').length,
     source_layers: sourceLayers,
     max_quality_score: maxQuality,
-    preparation_ready: validation.can_prepare,
-    validation_stage: validation.stage,
+    preparation_ready: digest.decision.allowed,
+    validation_stage: stage,
     source_grades: validation.source_grades,
-    blocker: validation.blockers[0] || validation.warnings[0] || null,
+    blocker: digest.decision.allowed ? null : digest.decision.reason,
     digest: {
       title: digest.title,
       summary: digest.summary,
       preview: digest.preview,
       decision: digest.decision,
     },
-    aiReview: attachStoredReview(normalizedCluster, digest),
+    aiReview,
     system_status: cluster.status === 'archived'
       ? 'archived'
-      : validation.stage === 'ready'
+      : stage === 'ready'
         ? 'ready'
-        : validation.stage === 'reviewable'
+        : stage === 'reviewable'
           ? 'reviewable'
           : 'needs_verification',
   };

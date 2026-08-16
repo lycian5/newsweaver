@@ -42,7 +42,7 @@ assert.match(standard, /리서치 검증 기준/);
 assert.match(standard, /등록용 기사 준비 화면에서 실제 본문을 작성합니다/);
 assert.match(standard, /발행일/);
 assert.match(standard, /작성 보류/);
-assert.match(standard, /수집이 끝난 뒤/);
+assert.match(standard, /가능\/보류로 다시 나눕니다/);
 assert.match(review, /작성 보류/);
 assert.doesNotMatch(standard, /맥락 요약/);
 assert.doesNotMatch(deployReadme, /맥락 요약/);

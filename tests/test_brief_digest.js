@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const { attachStoredReview, reviewMatchesSummary, summaryHash } = require('../lib/briefSummaryReviewJob');
 const {
   buildBriefDigest,
+  classifyAfterAiReview,
   collapseFacts,
   collapseSources,
   extraLabel,
@@ -94,6 +95,12 @@ assert.equal(attachStoredReview({
 assert.equal(attachStoredReview({
   validation_snapshot: { ai_summary_review: { verdict: 'supported', summary_hash: hashed } },
 }, { summary: '다른 요약' }), null);
+
+const readyRules = { stage: 'ready', warnings: [], blockers: [] };
+assert.equal(classifyAfterAiReview(readyRules, [], { verdict: 'supported' }).allowed, true);
+assert.equal(classifyAfterAiReview(readyRules, [], { verdict: 'needs_review' }).allowed, false);
+assert.equal(classifyAfterAiReview(readyRules, [], { verdict: 'needs_review' }).label, '작성 보류');
+assert.equal(classifyAfterAiReview({ stage: 'blocked', blockers: ['근거 없음'] }, [], { verdict: 'supported' }).allowed, false);
 
 const agent = require('node:fs').readFileSync(require.resolve('../scripts/agent-reach-collect'), 'utf8');
 assert.match(agent, /reviewBriefsAfterCollection/);

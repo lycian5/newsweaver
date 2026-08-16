@@ -22,6 +22,8 @@ assert.match(api, /action === 'prepare'/);
 assert.match(api, /ai_verify_brief/);
 assert.match(api, /generateBriefSummaryReview/);
 assert.match(api, /attachStoredReview/);
+assert.match(api, /classifyAfterAiReview/);
+assert.match(api, /verdict !== 'supported'/);
 assert.match(api, /validation_snapshot/);
 assert.match(api, /fetchBriefClusters/);
 assert.match(api, /isMissingBriefMetadata/);
