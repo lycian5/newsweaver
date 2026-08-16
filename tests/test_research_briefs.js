@@ -21,6 +21,8 @@ assert.match(api, /validation\.can_prepare/);
 assert.match(api, /action === 'prepare'/);
 assert.match(api, /ai_verify_brief/);
 assert.match(api, /generateBriefSummaryReview/);
+assert.match(api, /attachStoredReview/);
+assert.match(api, /validation_snapshot/);
 assert.match(api, /fetchBriefClusters/);
 assert.match(api, /isMissingBriefMetadata/);
 
@@ -30,6 +32,8 @@ assert.match(page, /지금 작성 가능/);
 assert.match(page, /\/vps-collector/);
 assert.match(page, /바로 기사 작성/);
 assert.match(page, /요약 AI 검증/);
+assert.match(page, /summaryReviewBadge/);
+assert.match(page, /요약 확인/);
 assert.match(page, /ai_verify_brief/);
 assert.match(page, /바로 작성/);
 assert.match(page, /class="blurb"/);

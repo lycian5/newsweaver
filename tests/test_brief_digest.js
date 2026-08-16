@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { attachStoredReview, reviewMatchesSummary, summaryHash } = require('../lib/briefSummaryReviewJob');
 const {
   buildBriefDigest,
   collapseFacts,
@@ -82,5 +83,19 @@ const thin = buildBriefDigest({
 }], [], { stage: 'ready', warnings: [], blockers: [] });
 assert.equal(thin.decision.label, '작성 가능 · 원문 확인');
 assert.equal(thin.decision.needs_source_read, true);
+
+const hashed = summaryHash('같은 요약');
+assert.equal(hashed.length, 64);
+assert.equal(reviewMatchesSummary({ summary_hash: hashed }, '같은 요약'), true);
+assert.equal(reviewMatchesSummary({ summary_hash: hashed }, '다른 요약'), false);
+assert.equal(attachStoredReview({
+  validation_snapshot: { ai_summary_review: { verdict: 'supported', summary_hash: hashed } },
+}, { summary: '같은 요약' }).verdict, 'supported');
+assert.equal(attachStoredReview({
+  validation_snapshot: { ai_summary_review: { verdict: 'supported', summary_hash: hashed } },
+}, { summary: '다른 요약' }), null);
+
+const agent = require('node:fs').readFileSync(require.resolve('../scripts/agent-reach-collect'), 'utf8');
+assert.match(agent, /reviewBriefsAfterCollection/);
 
 process.stdout.write('Brief digest checks passed.\n');

@@ -21,5 +21,6 @@ assert.match(deploy, /collection-notifications\.js/);
 assert.match(deploy, /freeCollection\.js/);
 assert.match(deploy, /package\.json/);
 assert.match(deploy, /npm install --omit=dev/);
+assert.match(deploy, /briefSummaryReviewJob\.js/);
 assert.doesNotMatch(deploy, /ufw allow 8787/);
 process.stdout.write('Operations health checks passed.\n');

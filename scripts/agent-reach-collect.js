@@ -114,6 +114,16 @@ async function main() {
       } catch (err) {
         failures.push({ source: 'briefs', keyword: '', error: `Ready brief count failed: ${err.message}` });
       }
+      try {
+        const reviewStats = await reviewBriefsAfterCollection(runStartedAt);
+        if (reviewStats && !reviewStats.skipped) {
+          clusterStats.briefReviews = reviewStats;
+        } else if (reviewStats?.reason && reviewStats.reason !== 'disabled') {
+          failures.push({ source: 'brief_review', keyword: '', error: reviewStats.reason.slice(0, 500) });
+        }
+      } catch (err) {
+        failures.push({ source: 'brief_review', keyword: '', error: `Brief summary review failed: ${err.message}` });
+      }
     }
 
     const status = failures.length ? 'partial' : 'succeeded';
@@ -125,6 +135,7 @@ async function main() {
       clusters_updated: clusterStats.clustersUpdated,
       facts_extracted: factsExtracted,
       ready_briefs: readyBriefs,
+      brief_reviews: clusterStats.briefReviews?.reviewed || 0,
     };
     const summary = {
       ok: true,
@@ -141,6 +152,7 @@ async function main() {
       clustersUpdated: clusterStats.clustersUpdated,
       readyBriefs,
       factsExtracted,
+      briefReviews: clusterStats.briefReviews || null,
       funnel,
       risingKeywordsApplied: inlineKeywords.length ? 0 : keywordSelection.rising.length,
       failures,
@@ -154,7 +166,15 @@ async function main() {
 }
 
 function emptyClusterStats() {
-  return { articlesAssigned: 0, clustersCreated: 0, clustersUpdated: 0, failures: [] };
+  return { articlesAssigned: 0, clustersCreated: 0, clustersUpdated: 0, failures: [], briefReviews: null };
+}
+
+async function reviewBriefsAfterCollection(since) {
+  const { reviewUpdatedBriefs } = require('../lib/briefSummaryReviewJob');
+  return reviewUpdatedBriefs({
+    since,
+    request: (path, options) => supabaseRequest(`${requiredEnv('SUPABASE_URL')}${path}`, options),
+  });
 }
 
 function mergeClusterStats(left, right) {

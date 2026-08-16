@@ -25,6 +25,7 @@ const {
 } = require('../../lib/editorialPolicy');
 const { classificationFromDraft, mapPlatformCategory } = require('../../lib/platformCategories');
 const { buildBriefDigest } = require('../../lib/briefDigest');
+const { attachStoredReview, summaryHash } = require('../../lib/briefSummaryReviewJob');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -272,6 +273,7 @@ async function getBrief(req, res) {
       facts: facts || [],
       digest,
       validation,
+      aiReview: attachStoredReview(normalizedCluster, digest),
       history: [
         { type: 'collected', at: normalizedCluster.first_seen_at, label: '최초 수집' },
         { type: 'updated', at: normalizedCluster.last_seen_at, label: '최근 근거 갱신' },
@@ -413,7 +415,7 @@ async function fetchBriefClusters(supabase, req, limit) {
 function briefClusterQuery(supabase, req, limit, legacy) {
   const columns = legacy
     ? 'id,category,representative_title,event_date,first_seen_at,last_seen_at,article_count,official_source_count,status'
-    : 'id,category,representative_title,event_date,first_seen_at,last_seen_at,article_count,official_source_count,independent_source_count,editorial_state,prepared_draft_id,status';
+    : 'id,category,representative_title,event_date,first_seen_at,last_seen_at,article_count,official_source_count,independent_source_count,editorial_state,prepared_draft_id,status,validation_snapshot';
   let query = supabase.from('event_clusters').select(columns).order('last_seen_at', { ascending: false }).limit(limit);
   if (req.query?.category) query = query.eq('category', req.query.category);
   if (req.query?.status) query = query.eq('status', req.query.status);
@@ -436,7 +438,7 @@ function normalizeBriefCluster(cluster) {
 }
 
 function isMissingBriefMetadata(error) {
-  return error?.code === '42703' && /independent_source_count|editorial_state|prepared_draft_id/.test(error.message || '');
+  return error?.code === '42703' && /independent_source_count|editorial_state|prepared_draft_id|validation_snapshot/.test(error.message || '');
 }
 
 function hasBriefWorkflowColumns(cluster) {
@@ -593,6 +595,18 @@ async function verifyBriefSummary(req, res) {
   });
   try {
     const { review, usage } = await generateBriefSummaryReview(route, { digest, context });
+    const stored = {
+      ...review,
+      summary_hash: summaryHash(digest.summary),
+      reviewed_at: new Date().toISOString(),
+      model: route.model,
+      provider: route.provider,
+    };
+    const snapshot = cluster.validation_snapshot && typeof cluster.validation_snapshot === 'object'
+      ? { ...cluster.validation_snapshot, ai_summary_review: stored }
+      : { ai_summary_review: stored };
+    const { error: snapshotError } = await supabase.from('event_clusters').update({ validation_snapshot: snapshot }).eq('id', clusterId);
+    if (snapshotError && !isMissingBriefMetadata(snapshotError)) throw snapshotError;
     const usageEvent = await recordAiUsage(supabase, {
       draftId: null,
       route,
@@ -602,7 +616,7 @@ async function verifyBriefSummary(req, res) {
       status: 'succeeded',
     });
     return res.status(200).json({
-      review,
+      review: stored,
       digest: { title: digest.title, summary: digest.summary },
       model: route.model,
       provider: route.provider,
@@ -833,6 +847,7 @@ function summarizeBrief(cluster, articles, facts) {
       preview: digest.preview,
       decision: digest.decision,
     },
+    aiReview: attachStoredReview(normalizedCluster, digest),
     system_status: cluster.status === 'archived'
       ? 'archived'
       : validation.stage === 'ready'
