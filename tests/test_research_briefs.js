@@ -20,7 +20,10 @@ assert.match(api, /action === 'prepare'/);
 assert.match(api, /fetchBriefClusters/);
 assert.match(api, /isMissingBriefMetadata/);
 
+assert.match(page, /오늘 할 일/);
 assert.match(page, /브리프 선별 큐/);
+assert.match(page, /지금 작성 가능/);
+assert.match(page, /\/vps-collector/);
 assert.match(page, /검증 후 기사 초안 준비/);
 assert.match(page, /검토 조건으로 기사 초안 준비/);
 assert.match(page, /독립 발행처/);

@@ -41,7 +41,7 @@
 | 공식 도메인 검색어 | `scripts/research-query-taxonomy.js` |
 | VPS 배포 | `deploy/n8n/deploy.ps1` |
 | 운영 화면 | `docs/vps-collector.html`, `docs/research-briefs.html`, `docs/coanews-draft.html` |
-| 브리프 제안 목업 | `docs/research-briefs-mockup.html` |
+| 브리프 화면 | 기본 큐는 오늘 작성 가능 소재. 필터는 접혀 있음 |
 
 공개 랜딩은 `docs/index.html`입니다. 관리자 운영 화면이 아닙니다.
 
