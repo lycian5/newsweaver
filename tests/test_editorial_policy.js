@@ -63,6 +63,52 @@ const policy = validateBriefForPreparation({
 assert.equal(policy.stage, 'ready');
 assert.equal(policy.can_prepare, true);
 
+const weekOldNews = validateBriefForPreparation(cluster, [
+  media('first.example', { published_at: '2026-08-04T01:00:00.000Z' }),
+  media('second.example', { published_at: '2026-08-04T02:00:00.000Z' }),
+], [], { now });
+assert.equal(weekOldNews.stage, 'reviewable');
+assert.match(weekOldNews.warnings.join(' '), /7일/);
+
+const monthOldNews = validateBriefForPreparation(cluster, [
+  media('first.example', { published_at: '2026-07-01T01:00:00.000Z' }),
+  media('second.example', { published_at: '2026-07-01T02:00:00.000Z' }),
+], [], { now });
+assert.equal(monthOldNews.stage, 'reviewable');
+assert.match(monthOldNews.warnings.join(' '), /30일/);
+
+const undatedNews = validateBriefForPreparation(cluster, [
+  media('first.example', { published_at: null }),
+  media('second.example', { published_at: null }),
+], [], { now });
+assert.equal(undatedNews.stage, 'reviewable');
+assert.match(undatedNews.warnings.join(' '), /발행일/);
+
+const oldPolicy = validateBriefForPreparation({
+  ...cluster,
+  category: 'policy',
+  event_date: '2026-07-20',
+}, [media('agency.go.kr', {
+  source_type: 'official',
+  source_layer: 'official',
+  authority_score: 95,
+  published_at: '2026-07-20T00:00:00.000Z',
+})], [], { now });
+assert.equal(oldPolicy.stage, 'reviewable');
+assert.match(oldPolicy.warnings.join(' '), /14일/);
+
+const upcomingPolicy = validateBriefForPreparation({
+  ...cluster,
+  category: 'policy',
+  event_date: '2026-08-20',
+}, [media('agency.go.kr', {
+  source_type: 'official',
+  source_layer: 'official',
+  authority_score: 95,
+  published_at: null,
+})], [], { now });
+assert.equal(upcomingPolicy.stage, 'ready');
+
 const api = fs.readFileSync(require.resolve('../api/editorial/drafts'), 'utf8');
 const page = fs.readFileSync(require.resolve('../docs/research-briefs.html'), 'utf8');
 const migration = fs.readFileSync(require.resolve('../supabase/migrations/20260814_editorial_policy.sql'), 'utf8');
