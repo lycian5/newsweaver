@@ -3,6 +3,12 @@ const { getSupabase } = require('../../lib/supabase');
 const { assertCronAuth } = require('../../lib/cronAuth');
 const { searchNews } = require('../../lib/naver');
 const { searchGoogleNews } = require('../../lib/googleNews');
+const { isBingNewsEnabled, searchBingNews } = require('../../lib/bingNews');
+const {
+  fetchKoreanNewsRss,
+  isKoreanNewsRssEnabled,
+  matchRssItemsToKeywords,
+} = require('../../lib/koreanNewsRss');
 const { fetchPolicyNotices } = require('../../lib/policySources');
 const { fetchPublicDataNotices, getServiceKey } = require('../../lib/publicDataSources');
 const { selectCollectionKeywords } = require('../../scripts/keyword-selection');
@@ -108,7 +114,7 @@ module.exports = async (req, res) => {
     collector: 'vercel_cron',
     trigger: collectionMode === 'previous_day_recovery' ? 'recovery' : 'cron',
     status: 'running',
-    sources: ['naver_news', 'google_news', 'policy_notice', 'public_data'],
+    sources: collectSources(),
     keywords_processed: selectedKeywords.length,
     collection_mode: collectionMode,
     target_date: collectionWindow.targetDate,
@@ -124,13 +130,17 @@ module.exports = async (req, res) => {
 
   for (const kw of selectedKeywords) {
     try {
-      const [naverItems, googleItems] = await Promise.all([
+      const [naverItems, googleItems, bingItems] = await Promise.all([
         searchNews(kw.keyword).catch((e) => {
           console.error(`[collect] 네이버 검색 실패 (${kw.keyword}):`, e.message);
           return [];
         }),
         searchGoogleNews(kw.keyword).catch((e) => {
           console.error(`[collect] 구글 뉴스 실패 (${kw.keyword}):`, e.message);
+          return [];
+        }),
+        searchBingNews(kw.keyword).catch((e) => {
+          console.error(`[collect] 빙 뉴스 실패 (${kw.keyword}):`, e.message);
           return [];
         }),
       ]);
@@ -158,6 +168,17 @@ module.exports = async (req, res) => {
           publisher_name: item.sourceName || null,
           publisher_url: item.sourceUrl || null,
         })),
+        ...bingItems.map((item) => ({
+          keyword_id: kw.id,
+          category: kw.category,
+          source: 'bing_news',
+          title: item.title,
+          url: item.link,
+          summary: stripHtml(item.description || ''),
+          published_at: toIsoOrNull(item.pubDate),
+          discovery_channel: 'bing_news',
+          publisher_name: item.sourceName || null,
+        })),
       ];
 
       const normalized = addToFunnel(funnel, rows, collectionWindow);
@@ -181,8 +202,31 @@ module.exports = async (req, res) => {
     }
   }
 
+  let koreanNewsRssUpserted = 0;
   let policyNoticesUpserted = 0;
   let publicApiNoticesUpserted = 0;
+  try {
+    const rssResult = await fetchKoreanNewsRss();
+    sourceFailures.push(...rssResult.failures);
+    const rssRows = matchRssItemsToKeywords(rssResult.items, selectedKeywords).map((row) => ({
+      ...row,
+      title: stripHtml(row.title),
+      summary: stripHtml(row.summary || ''),
+      published_at: toIsoOrNull(row.published_at),
+    }));
+    const normalized = addToFunnel(funnel, rssRows, collectionWindow);
+    if (normalized.length) {
+      const { error: upsertError } = await supabase
+        .from('raw_articles')
+        .upsert(normalized, { onConflict: 'url', ignoreDuplicates: true });
+      if (upsertError) throw upsertError;
+      koreanNewsRssUpserted = normalized.length;
+      funnel.stored += normalized.length;
+    }
+  } catch (err) {
+    sourceFailures.push({ source: 'korean_news_rss', error: err.message });
+    console.error('[collect] 국내 언론 RSS 수집 실패:', err.message);
+  }
   try {
     const notices = await fetchPolicyNotices();
     const policyRows = notices.map((n) => ({
@@ -259,6 +303,9 @@ module.exports = async (req, res) => {
     keywordsProcessed: selectedKeywords.length,
     keywordFailures,
     articlesUpserted,
+    bingNewsEnabled: isBingNewsEnabled(),
+    koreanNewsRssEnabled: isKoreanNewsRssEnabled(),
+    koreanNewsRssUpserted,
     policyNoticesUpserted,
     publicApiConfigured: Boolean(getServiceKey()),
     publicApiNoticesUpserted,
@@ -267,6 +314,14 @@ module.exports = async (req, res) => {
     completedAt,
   });
 };
+
+function collectSources() {
+  const sources = ['naver_news', 'google_news'];
+  if (isBingNewsEnabled()) sources.push('bing_news');
+  if (isKoreanNewsRssEnabled()) sources.push('korean_news_rss');
+  sources.push('policy_notice', 'public_data');
+  return sources;
+}
 
 function addToFunnel(target, rows, window, options = {}) {
   const filtered = filterRowsForWindow(rows, window, options);

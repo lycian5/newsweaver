@@ -22,7 +22,10 @@ assert.match(buildSearchQuery(keyword, 'explore'), /배달 플랫폼/);
 assert.match(buildSearchQuery(keyword, 'precision'), /소상공인 자영업 매출 비용 경영/);
 const verification = buildOfficialSearchQuery(keyword);
 assert.match(verification, /site:semas\.or\.kr/);
+assert.match(verification, /site:bok\.or\.kr/);
 assert.match(verification, /filetype:pdf/);
 assert.match(verification, /filetype:hwp/);
+assert.match(buildOfficialSearchQuery({ keyword: '표시광고', category: 'policy' }), /site:ftc\.go\.kr/);
+assert.match(buildOfficialSearchQuery({ keyword: '전통시장', category: 'local_commerce' }), /site:ftc\.go\.kr/);
 
 process.stdout.write('Research query taxonomy checks passed.\n');

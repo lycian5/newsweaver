@@ -12,6 +12,7 @@ const {
   buildOfficialSearchQuery: buildLayeredOfficialSearchQuery,
   buildSearchQuery: buildLayeredSearchQuery,
 } = require('./research-query-taxonomy');
+const { DEFAULT_FEEDS: KOREAN_NEWS_FEEDS } = require('../lib/koreanNewsRss');
 
 const DEFAULT_SOURCES = ['exa', 'official', 'rss'];
 const DEFAULT_RSS_FEEDS = [
@@ -548,7 +549,7 @@ async function getRedditAccessToken() {
 }
 
 async function collectRss(keyword) {
-  const feeds = parseFeeds(process.env.AGENT_REACH_RSS_FEEDS || DEFAULT_RSS_FEEDS);
+  const feeds = resolveRssFeeds();
   const matchingFeeds = feeds.filter((feed) => !feed.category || feed.category === keyword.category);
   const rows = [];
 
@@ -974,6 +975,33 @@ function parseFeeds(value) {
   }).filter((feed) => feed.url);
 }
 
+function isAgentReachKoreanRssEnabled(env = process.env) {
+  return !/^(0|false|off|no)$/i.test(String(env.AGENT_REACH_KR_NEWS_RSS || '').trim());
+}
+
+function mergeFeedsByUrl(baseFeeds, extraFeeds) {
+  const merged = [];
+  const seen = new Set();
+  for (const feed of [...(baseFeeds || []), ...(extraFeeds || [])]) {
+    const url = String(feed?.url || '').trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    merged.push({
+      name: feed.name || hostName(url),
+      url,
+      category: feed.category || null,
+    });
+  }
+  return merged;
+}
+
+function resolveRssFeeds(env = process.env) {
+  const custom = String(env.AGENT_REACH_RSS_FEEDS || '').trim();
+  const base = parseFeeds(custom || DEFAULT_RSS_FEEDS);
+  if (!isAgentReachKoreanRssEnabled(env)) return base;
+  return mergeFeedsByUrl(base, KOREAN_NEWS_FEEDS);
+}
+
 function buildSearchQuery(keyword) {
   const context = {
     ai_business: 'AI business automation agents enterprise latest',
@@ -997,12 +1025,7 @@ function redditUserAgent() {
 }
 
 function buildOfficialSearchQuery(keyword) {
-  const domains = {
-    ai_business: '(site:msit.go.kr OR site:nipa.kr OR site:kisa.or.kr OR site:korea.kr)',
-    startup: '(site:mss.go.kr OR site:k-startup.go.kr OR site:semas.or.kr OR site:bizinfo.go.kr)',
-    policy: '(site:korea.kr OR site:mss.go.kr OR site:moel.go.kr OR site:bizinfo.go.kr)',
-  }[keyword.category] || '(site:go.kr OR site:korea.kr)';
-  return `${keyword.keyword} ${domains} 최신 공고 발표 자료`.trim();
+  return buildLayeredOfficialSearchQuery(keyword);
 }
 
 function normalizeKeyword(raw) {
@@ -1186,9 +1209,12 @@ module.exports = {
   dateDistanceDays,
   eventFingerprint,
   extractFacts,
+  isAgentReachKoreanRssEnabled,
   isOfficialDomain,
   findMatchingCluster,
+  mergeFeedsByUrl,
   normalizeUrl,
+  resolveRssFeeds,
   scoreEvidence,
   scoreQuality,
   selectHybridKeywords,

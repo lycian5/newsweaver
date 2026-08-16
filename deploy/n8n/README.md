@@ -50,9 +50,9 @@ ssh -L 5678:127.0.0.1:5678 root@158.247.245.66
 
 ## 수집 운영
 
-- Vercel 전날 마감 수집: 매일 07:10 KST가 속한 시간대, 전날 발행분, Naver와 Google 중심, 18개 키워드
+- Vercel 전날 마감 수집: 매일 07:10 KST가 속한 시간대, 전날 발행분, Naver·Google·Bing과 국내 언론 RSS, 18개 키워드
 - 조건부 누락 보정: 매일 09:00 KST가 속한 시간대, 실패·부분 실패·저수집일 때만 재수집
-- VPS Agent Reach: 매일 16:30 KST, Exa, 공식 출처, RSS, 54개 키워드
+- VPS Agent Reach: 매일 16:30 KST, Exa, 공식 출처, 국내·해외 RSS, 54개 키워드
 - 소재 정리: 매일 17:30 KST, 중복 제거, 점수화, 클러스터 및 브리프 생성
 - AI는 원시 수집에 사용하지 않고 선택된 브리프의 200~1600자 맥락 요약에만 사용
 - `n8n/workflow_collect.json`과 `n8n/workflow_suggest.json`은 보관용이며 활성화하지 않음

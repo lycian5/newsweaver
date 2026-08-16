@@ -26,11 +26,11 @@ const SYNONYM_GROUPS = Object.freeze([
 ]);
 
 const OFFICIAL_DOMAINS = Object.freeze({
-  ai_business: ['msit.go.kr', 'nipa.kr', 'kisa.or.kr', 'korea.kr'],
-  startup: ['mss.go.kr', 'k-startup.go.kr', 'semas.or.kr', 'bizinfo.go.kr'],
-  policy: ['korea.kr', 'mss.go.kr', 'moel.go.kr', 'bizinfo.go.kr'],
-  small_business_economy: ['mss.go.kr', 'semas.or.kr', 'kosis.kr', 'bok.or.kr'],
-  local_commerce: ['semas.or.kr', 'data.go.kr', 'kosis.kr', 'localdata.go.kr'],
+  ai_business: ['msit.go.kr', 'nipa.kr', 'kisa.or.kr', 'korea.kr', 'moef.go.kr'],
+  startup: ['mss.go.kr', 'k-startup.go.kr', 'semas.or.kr', 'bizinfo.go.kr', 'korea.kr'],
+  policy: ['korea.kr', 'mss.go.kr', 'moel.go.kr', 'bizinfo.go.kr', 'ftc.go.kr', 'moef.go.kr'],
+  small_business_economy: ['mss.go.kr', 'semas.or.kr', 'kosis.kr', 'bok.or.kr', 'moef.go.kr', 'kostat.go.kr'],
+  local_commerce: ['semas.or.kr', 'data.go.kr', 'kosis.kr', 'localdata.go.kr', 'ftc.go.kr'],
   marketing_distribution: ['ftc.go.kr', 'kca.go.kr', 'mss.go.kr', 'data.go.kr'],
   field_issue: ['ftc.go.kr', 'scourt.go.kr', 'mss.go.kr', 'semas.or.kr'],
 });
