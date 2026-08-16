@@ -7,7 +7,7 @@ const {
   reviewDraftEvidence,
   sanitizeArticleHtml,
 } = require('../../lib/editorialAi');
-const { generateEditorialProposal, resolveEditorialAiRoute } = require('../../lib/editorialAiProvider');
+const { generateBriefSummaryReview, generateEditorialProposal, resolveEditorialAiRoute } = require('../../lib/editorialAiProvider');
 const { recordAiUsage, reserveAiBudget } = require('../../lib/editorialAiBudget');
 const {
   assertCronAuth,
@@ -44,6 +44,7 @@ module.exports = async (req, res) => {
     if (req.method === 'POST' && req.body?.action === 'prepare') return prepareArticleDraft(req, res);
     if (req.method === 'POST' && req.body?.action === 'ai_generate') return generateDraftWithAi(req, res);
     if (req.method === 'POST' && req.body?.action === 'ai_verify') return verifyDraftEvidence(req, res);
+    if (req.method === 'POST' && req.body?.action === 'ai_verify_brief') return verifyBriefSummary(req, res);
     if (req.method === 'POST' && req.body?.action === 'ai_generate_image') return generateDraftImage(req, res);
     if (req.method === 'POST' && ['start_review', 'hold', 'resume', 'archive'].includes(req.body?.action)) return updateBriefState(req, res);
     if (req.method === 'PATCH') return updateDraft(req, res);
@@ -564,6 +565,60 @@ async function insertAiDraftVersion(supabase, version) {
   delete legacy.estimated_cost_usd;
   ({ error } = await supabase.from('editorial_draft_versions').insert(legacy));
   if (error) throw error;
+}
+
+async function verifyBriefSummary(req, res) {
+  const clusterId = Number.parseInt(req.body?.eventClusterId, 10);
+  if (!clusterId) return res.status(400).json({ error: 'eventClusterId is required' });
+  const supabase = getSupabase();
+  const [{ data: cluster, error: clusterError }, { data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
+    supabase.from('event_clusters').select('*').eq('id', clusterId).single(),
+    supabase.from('raw_articles').select('title,url,summary,published_at,source_domain,source_type,source_layer,authority_score,quality_score,verification_status').eq('event_cluster_id', clusterId).order('quality_score', { ascending: false }),
+    supabase.from('article_facts').select('fact_text,fact_type,source_url,is_official,confidence').eq('event_cluster_id', clusterId).order('confidence', { ascending: false }),
+  ]);
+  if (clusterError) throw clusterError;
+  if (articleError) throw articleError;
+  if (factError) throw factError;
+  const sortedArticles = sortEvidence(articles || []);
+  const validation = validateBriefForPreparation(cluster, sortedArticles, facts || []);
+  const digest = buildBriefDigest(cluster, sortedArticles, facts || [], validation);
+  if (!digest.summary) return res.status(409).json({ error: '검증할 요약이 없습니다.' });
+  const context = buildEvidence(cluster, sortedArticles, facts || []);
+  const route = resolveEditorialAiRoute({ tier: req.body?.tier || 'basic' });
+  const reserved = await reserveAiBudget(supabase, {
+    draftId: null,
+    route,
+    context: { digest, evidence: context.evidence },
+    scope: 'brief_summary',
+  });
+  try {
+    const { review, usage } = await generateBriefSummaryReview(route, { digest, context });
+    const usageEvent = await recordAiUsage(supabase, {
+      draftId: null,
+      route,
+      scope: 'brief_summary',
+      reserved,
+      usage,
+      status: 'succeeded',
+    });
+    return res.status(200).json({
+      review,
+      digest: { title: digest.title, summary: digest.summary },
+      model: route.model,
+      provider: route.provider,
+      usage: usageEvent,
+    });
+  } catch (err) {
+    await recordAiUsage(supabase, {
+      draftId: null,
+      route,
+      scope: 'brief_summary',
+      reserved,
+      status: 'failed',
+      errorMessage: err.message,
+    });
+    throw err;
+  }
 }
 
 async function verifyDraftEvidence(req, res) {

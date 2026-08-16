@@ -19,6 +19,8 @@ assert.match(api, /evaluateBriefPolicy/);
 assert.match(api, /buildBriefDigest/);
 assert.match(api, /validation\.can_prepare/);
 assert.match(api, /action === 'prepare'/);
+assert.match(api, /ai_verify_brief/);
+assert.match(api, /generateBriefSummaryReview/);
 assert.match(api, /fetchBriefClusters/);
 assert.match(api, /isMissingBriefMetadata/);
 
@@ -27,6 +29,8 @@ assert.match(page, /브리프 선별 큐/);
 assert.match(page, /지금 작성 가능/);
 assert.match(page, /\/vps-collector/);
 assert.match(page, /바로 기사 작성/);
+assert.match(page, /요약 AI 검증/);
+assert.match(page, /ai_verify_brief/);
 assert.match(page, /바로 작성/);
 assert.match(page, /class="blurb"/);
 assert.match(page, /작성 보류/);

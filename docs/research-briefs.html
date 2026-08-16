@@ -42,7 +42,12 @@
     .verdict.reviewable{border-color:#f3d399;background:#fff4dc}
     .verdict.blocked{border-color:#fecaca;background:#fff6f5}
     .verdict h3{margin:0 0 6px;font-size:15px}
-    .summary{font-size:15px;line-height:1.7;margin:0 0 14px}
+    .summary{font-size:15px;line-height:1.7;margin:0 0 10px}
+    .ai-review{border:1px solid #bae6fd;background:#f0f9ff;border-radius:7px;padding:12px;margin-top:10px;font-size:13px;line-height:1.55}
+    .ai-review.needs_review,.ai-review.insufficient{border-color:#f3d399;background:#fff4dc}
+    .ai-review.supported{border-color:#b7e4c7;background:#e8f6ee}
+    .ai-review h4{margin:0 0 6px;font-size:14px}
+    .ai-review ul{margin:6px 0 0;padding-left:18px}
     .digest{width:100%;border-collapse:collapse;font-size:13px}
     .digest th,.digest td{border-top:1px solid #e5edf0;padding:9px 8px;text-align:left;vertical-align:top}
     .digest th{width:72px;color:#075f7d;font-size:12px}
@@ -284,7 +289,7 @@
           <p class="hint" style="margin:0">${esc(decision.reason || verdictCopy(validation).detail)}</p>
         </div>
         <div class="cta">${primaryActions(brief, validation)}${secondaryActions(brief)}</div>
-        <section class="detail-section"><h3>요약</h3><p class="summary">${esc(digest.summary || '요약할 원문이 부족합니다. 근거 제목과 원문을 확인하세요.')}</p></section>
+        <section class="detail-section"><h3>요약</h3><p class="summary">${esc(digest.summary || '요약할 원문이 부족합니다. 근거 제목과 원문을 확인하세요.')}</p><div class="cta"><button class="btn secondary" id="verifySummary" type="button" ${digest.summary?'':'disabled'}>요약 AI 검증</button></div>${aiReviewHtml(brief.aiReview)}</section>
         <section class="detail-section"><h3>핵심</h3>${digestTable(digest.highlights || [])}</section>
         <section class="detail-section"><h3>근거 출처</h3>${visibleSources.map(sourceHtml).join('') || '<p class="muted">근거 기사가 없습니다.</p>'}${sources.length > 3 ? `<button class="btn secondary" id="more" type="button">${showAllSources ? '접기' : `근거 묶음 ${sources.length - 3}개 더 보기`}</button>` : ''}</section>
         <details class="more"><summary>검증 항목·이력 보기</summary>
@@ -331,6 +336,35 @@
       $('archive')?.addEventListener('click', () => changeState('archive'));
       $('copy')?.addEventListener('click', copyBrief);
       $('prepare')?.addEventListener('click', prepareDraft);
+      $('verifySummary')?.addEventListener('click', verifySummary);
+    }
+    function aiReviewHtml(review){
+      if (!review) return '';
+      const titles = { supported:'요약이 근거와 맞습니다', needs_review:'요약에 확인이 필요합니다', insufficient:'근거가 부족해 요약을 확정할 수 없습니다' };
+      const lists = [
+        review.issues?.length ? `<p>문제</p><ul>${review.issues.map((item)=>`<li>${esc(item)}</li>`).join('')}</ul>` : '',
+        review.supported_points?.length ? `<p>근거와 맞는 점</p><ul>${review.supported_points.map((item)=>`<li>${esc(item)}</li>`).join('')}</ul>` : '',
+        review.missing_points?.length ? `<p>빠진 점</p><ul>${review.missing_points.map((item)=>`<li>${esc(item)}</li>`).join('')}</ul>` : '',
+      ].filter(Boolean).join('');
+      return `<div class="ai-review ${esc(review.verdict || '')}"><h4>${esc(titles[review.verdict] || '요약 검증')}</h4><p>${esc(review.reason || '')}</p>${lists}</div>`;
+    }
+    async function verifySummary(){
+      if (!selectedBrief?.digest?.summary) return;
+      const button = $('verifySummary');
+      button.disabled = true;
+      button.textContent = '검증 중';
+      try {
+        const response = await CoaAuth.request('/api/editorial/drafts', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'ai_verify_brief', eventClusterId: selectedBrief.id }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || '요약을 검증하지 못했습니다.');
+        selectedBrief = { ...selectedBrief, aiReview: data.review };
+        renderDetail();
+        toast(data.review.verdict === 'supported' ? '요약 검증을 통과했습니다.' : '요약 확인이 필요합니다.');
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = '요약 AI 검증';
+        toast(error.message, true);
+      }
     }
     async function changeState(action){
       try {
