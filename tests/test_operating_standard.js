@@ -43,6 +43,7 @@ assert.match(standard, /등록용 기사 준비 화면에서 실제 본문을 �
 assert.match(standard, /발행일/);
 assert.match(standard, /작성 보류/);
 assert.match(standard, /가능\/보류로 다시 나눕니다/);
+assert.match(standard, /gpt-5-mini/);
 assert.match(review, /작성 보류/);
 assert.doesNotMatch(standard, /맥락 요약/);
 assert.doesNotMatch(deployReadme, /맥락 요약/);
