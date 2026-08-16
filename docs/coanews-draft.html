@@ -440,8 +440,13 @@
       currentDraftStatus = 'draft';
       localStorage.setItem(WORKFLOW_KEY, JSON.stringify({ draftId:currentDraftId, status:currentDraftStatus }));
       $('seedInfo').hidden = false;
+      const digest = seed.digest || {};
       const warningCount = seed.validation?.warnings?.length || 0;
-      $('seedInfo').innerHTML = `<strong>검증된 리서치 브리프</strong>${escapeHtml(seed.source_name || '')} · ${escapeHtml(seed.source_url || '')}<br>필수 검증을 통과했습니다.${warningCount ? ` 검토 경고 ${warningCount}건은 원문에서 다시 확인하세요.` : ''} 완성 기사 본문으로 다시 작성해야 합니다.`;
+      const sourceLines = (digest.sources || []).map((item) => {
+        const label = item.label || item.title || item.url || '';
+        return item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>` : escapeHtml(label);
+      }).join('<br>');
+      $('seedInfo').innerHTML = `<strong>${escapeHtml(digest.decision?.label || '검증된 리서치 브리프')}</strong>${digest.summary ? `<p style="margin:6px 0 8px;line-height:1.55">${escapeHtml(digest.summary)}</p>` : ''}${sourceLines || `${escapeHtml(seed.source_name || '')} · ${escapeHtml(seed.source_url || '')}`}<br>필수 검증을 통과했습니다.${warningCount ? ` 검토 경고 ${warningCount}건은 원문에서 다시 확인하세요.` : ''} 완성 기사 본문으로 다시 작성해야 합니다.`;
     }
 
     function categoryTags(category) {

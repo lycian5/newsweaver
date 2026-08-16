@@ -24,6 +24,7 @@
     "test:collection-schedule": "node tests/test_collection_schedule.js",
     "test:collection-window": "node tests/test_collection_window.js",
     "test:research-briefs": "node tests/test_research_briefs.js",
+    "test:brief-digest": "node tests/test_brief_digest.js",
     "test:editorial-workflow": "node tests/test_editorial_workflow.js",
     "test:platform-categories": "node tests/test_platform_categories.js",
     "test:editorial-ai": "node tests/test_editorial_ai.js",

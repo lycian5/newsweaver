@@ -105,6 +105,7 @@ async function main() {
       savedRows = await upsertRawArticles(rows);
       clusterStats = mergeClusterStats(clusterStats, await assignEventClusters(savedRows));
       clusterStats = mergeClusterStats(clusterStats, await backfillUnclusteredArticles());
+      failures.push(...clusterStats.failures);
       await backfillMissingClusterDates();
       factsExtracted = await upsertArticleFacts(savedRows);
       await touchKeywords(rows);
@@ -153,7 +154,7 @@ async function main() {
 }
 
 function emptyClusterStats() {
-  return { articlesAssigned: 0, clustersCreated: 0, clustersUpdated: 0 };
+  return { articlesAssigned: 0, clustersCreated: 0, clustersUpdated: 0, failures: [] };
 }
 
 function mergeClusterStats(left, right) {
@@ -161,6 +162,7 @@ function mergeClusterStats(left, right) {
     articlesAssigned: left.articlesAssigned + right.articlesAssigned,
     clustersCreated: left.clustersCreated + right.clustersCreated,
     clustersUpdated: left.clustersUpdated + right.clustersUpdated,
+    failures: [...(left.failures || []), ...(right.failures || [])],
   };
 }
 
@@ -715,34 +717,48 @@ async function assignEventClusters(rows) {
   if (!rows.length) return emptyClusterStats();
   const clusters = await loadRecentEventClusters();
   const affectedIds = new Set();
+  const failures = [];
   let clustersCreated = 0;
+  let articlesAssigned = 0;
 
   for (const row of rows) {
-    const match = freeCollection.findClusterMatch(row, clusters);
-    let cluster = match?.cluster || null;
-    if (!cluster) {
-      cluster = await createEventCluster(row);
-      clusters.unshift(cluster);
-      clustersCreated += 1;
+    try {
+      const fingerprint = ensureEventFingerprint(row);
+      const match = freeCollection.findClusterMatch(row, clusters);
+      let cluster = match?.cluster || null;
+      if (!cluster) {
+        cluster = await createEventCluster(row);
+        clusters.unshift(cluster);
+        clustersCreated += 1;
+      }
+      await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/raw_articles?id=eq.${row.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_cluster_id: cluster.id,
+          event_fingerprint: fingerprint,
+          cluster_match_method: match?.method || 'created',
+          cluster_match_score: match?.score || 1,
+        }),
+      });
+      row.event_cluster_id = cluster.id;
+      articlesAssigned += 1;
+      affectedIds.add(cluster.id);
+    } catch (err) {
+      failures.push({
+        source: 'clusters',
+        keyword: '',
+        error: `Cluster assign failed for article ${row.id || ''}: ${err.message}`.slice(0, 500),
+      });
     }
-    await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/raw_articles?id=eq.${row.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_cluster_id: cluster.id,
-        cluster_match_method: match?.method || 'created',
-        cluster_match_score: match?.score || 1,
-      }),
-    });
-    row.event_cluster_id = cluster.id;
-    affectedIds.add(cluster.id);
   }
 
   for (const clusterId of affectedIds) await refreshEventCluster(clusterId);
   return {
-    articlesAssigned: rows.length,
+    articlesAssigned,
     clustersCreated,
     clustersUpdated: affectedIds.size,
+    failures,
   };
 }
 
@@ -834,7 +850,20 @@ function findMatchingCluster(row, clusters) {
   return freeCollection.findMatchingCluster(row, clusters);
 }
 
+function ensureEventFingerprint(row) {
+  if (row?.event_fingerprint) return row.event_fingerprint;
+  const fingerprint = eventFingerprint(
+    row?.title,
+    row?.published_at || row?.collected_at,
+    row?.category
+  );
+  if (row) row.event_fingerprint = fingerprint;
+  return fingerprint;
+}
+
 async function createEventCluster(row) {
+  const fingerprint = ensureEventFingerprint(row);
+  if (!fingerprint) throw new Error('사건 클러스터 fingerprint가 없습니다.');
   const data = await supabaseRequest(`${requiredEnv('SUPABASE_URL')}/rest/v1/event_clusters?on_conflict=fingerprint`, {
     method: 'POST',
     headers: {
@@ -842,7 +871,7 @@ async function createEventCluster(row) {
       Prefer: 'resolution=merge-duplicates,return=representation',
     },
     body: JSON.stringify({
-      fingerprint: row.event_fingerprint,
+      fingerprint,
       category: row.category,
       representative_title: row.title,
       event_date: eventDate(row.published_at || row.collected_at),
@@ -1207,6 +1236,7 @@ module.exports = {
   buildOfficialSearchQuery,
   classifySource,
   dateDistanceDays,
+  ensureEventFingerprint,
   eventFingerprint,
   extractFacts,
   isAgentReachKoreanRssEnabled,

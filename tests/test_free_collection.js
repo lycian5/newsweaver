@@ -75,5 +75,7 @@ const agent = fs.readFileSync(require.resolve('../scripts/agent-reach-collect.js
 assert.match(cron, /normalizeAndDedupe/);
 assert.match(agent, /findClusterMatch/);
 assert.match(agent, /collection_runs/);
+assert.match(agent, /ensureEventFingerprint/);
+assert.match(agent, /fingerprint가 없습니다/);
 
 process.stdout.write('Free collection foundation checks passed.\n');

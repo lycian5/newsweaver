@@ -24,6 +24,7 @@ const {
   validateBriefForPreparation: evaluateBriefPolicy,
 } = require('../../lib/editorialPolicy');
 const { classificationFromDraft, mapPlatformCategory } = require('../../lib/platformCategories');
+const { buildBriefDigest } = require('../../lib/briefDigest');
 
 module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'private, no-store');
@@ -231,8 +232,8 @@ async function listBriefs(req, res) {
   const ids = (clusters || []).map((item) => item.id);
   if (!ids.length) return res.status(200).json({ briefs: [], metrics: emptyBriefMetrics(), collection: collectionHealth([]) });
   const [{ data: articles, error: articleError }, { data: facts, error: factError }] = await Promise.all([
-    supabase.from('raw_articles').select('event_cluster_id,url,published_at,source_domain,source_type,source_layer,authority_score,quality_score,verification_status').in('event_cluster_id', ids),
-    supabase.from('article_facts').select('event_cluster_id,fact_type,is_official').in('event_cluster_id', ids),
+    supabase.from('raw_articles').select('event_cluster_id,title,url,summary,published_at,source_domain,source_type,source_layer,authority_score,quality_score,verification_status').in('event_cluster_id', ids),
+    supabase.from('article_facts').select('event_cluster_id,fact_text,fact_type,is_official').in('event_cluster_id', ids),
   ]);
   if (articleError) throw articleError;
   if (factError) throw factError;
@@ -261,12 +262,14 @@ async function getBrief(req, res) {
   const normalizedCluster = normalizeBriefCluster(cluster);
   const sortedArticles = sortEvidence(articles || []);
   const validation = validateBriefForPreparation(normalizedCluster, sortedArticles, facts || []);
+  const digest = buildBriefDigest(normalizedCluster, sortedArticles, facts || [], validation);
   res.status(200).json({
     brief: {
       ...normalizedCluster,
       independent_source_count: independentSourceCount(sortedArticles),
       articles: sortedArticles,
       facts: facts || [],
+      digest,
       validation,
       history: [
         { type: 'collected', at: normalizedCluster.first_seen_at, label: '최초 수집' },
@@ -294,7 +297,7 @@ async function updateBriefState(req, res) {
   if (readError) throw readError;
   const transitions = {
     start_review: { from: ['unreviewed'], updates: { editorial_state: 'reviewing' } },
-    hold: { from: ['reviewing'], updates: { editorial_state: 'held' } },
+    hold: { from: ['unreviewed', 'reviewing'], updates: { editorial_state: 'held' } },
     resume: { from: ['held'], updates: { editorial_state: 'reviewing' } },
     archive: { from: ['unreviewed', 'reviewing', 'held'], updates: { status: 'archived' } },
   };
@@ -344,7 +347,8 @@ async function prepareArticleDraft(req, res) {
   const validation = validateBriefForPreparation(cluster, articles, facts);
   if (!validation.can_prepare) return res.status(409).json({ error: validation.blockers[0], validation });
 
-  const starter = buildArticleStarter(cluster, articles, facts);
+  const digest = buildBriefDigest(cluster, articles, facts, validation);
+  const starter = buildArticleStarter(cluster, articles, facts, digest);
   const classification = mapPlatformCategory(cluster.category);
   const row = {
     event_cluster_id: clusterId,
@@ -386,6 +390,7 @@ async function prepareArticleDraft(req, res) {
         is_official: fact.is_official,
         confidence: fact.confidence,
       })),
+      digest,
       validation,
     },
   });
@@ -677,29 +682,26 @@ function validateBriefForPreparation(cluster, articles, facts) {
   return evaluateBriefPolicy(cluster, articles || [], facts || []);
 }
 
-function buildArticleStarter(cluster, articles, facts) {
+function buildArticleStarter(cluster, articles, facts, digestInput) {
+  const digest = digestInput || buildBriefDigest(cluster, articles, facts);
   const primarySource = articles[0] || {};
-  const factItems = facts.length
-    ? facts.map((fact) => `<li>${escapeHtml(fact.fact_text)}</li>`).join('')
+  const highlightItems = digest.highlights.length
+    ? digest.highlights.map((row) => `<li><strong>${escapeHtml(row.label)}</strong> ${escapeHtml(row.value)}${row.detail ? ` (${escapeHtml(row.detail)})` : ''}</li>`).join('')
     : '<li>구조화 사실 없음 — 근거 기사 원문에서 핵심 사실을 확인하세요.</li>';
-  const referenceItems = articles
+  const referenceItems = digest.sources
     .filter((article) => article.url)
-    .map((article) => `<li><a href="${escapeHtml(article.url)}">${escapeHtml(article.title || article.url)}</a></li>`)
+    .map((article) => `<li><a href="${escapeHtml(article.url)}">${escapeHtml(article.label || article.title || article.url)}</a></li>`)
     .join('');
-  const summaryParts = [
-    ...facts.map((fact) => fact.fact_text),
-    primarySource.summary,
-  ].filter(Boolean);
   return {
-    title: String(cluster.representative_title || '').slice(0, 500),
-    summary: summaryParts.join('\n').slice(0, 1500),
+    title: String(digest.title || cluster.representative_title || '').slice(0, 500),
+    summary: digest.summary.slice(0, 1600),
     bodyHtml: [
-      '<h3>확인된 사실</h3>',
-      `<ul>${factItems}</ul>`,
-      '<h3>기사 작성 메모</h3>',
-      `<p>${escapeHtml(primarySource.summary || '근거 기사 내용을 토대로 완성된 기사 본문을 작성하세요.')}</p>`,
+      '<h3>소재 요약</h3>',
+      `<p>${escapeHtml(digest.summary || primarySource.summary || '근거 기사 내용을 토대로 완성된 기사 본문을 작성하세요.')}</p>`,
+      '<h3>핵심</h3>',
+      `<ul>${highlightItems}</ul>`,
       '<h3>참고자료</h3>',
-      `<ul>${referenceItems}</ul>`,
+      `<ul>${referenceItems || '<li>근거 URL 없음</li>'}</ul>`,
     ].join('\n'),
     tags: mapPlatformCategory(cluster.category).tags,
     primarySource,
@@ -757,6 +759,7 @@ function summarizeBrief(cluster, articles, facts) {
     independent_source_count: independentSources,
   };
   const validation = validateBriefForPreparation(normalizedCluster, articles, facts);
+  const digest = buildBriefDigest(normalizedCluster, articles, facts, validation);
   const sourceLayers = [...new Set(articles.map((article) => article.source_layer).filter(Boolean))];
   const maxQuality = articles.reduce((max, article) => Math.max(max, Number(article.quality_score || 0)), 0);
   return {
@@ -769,6 +772,12 @@ function summarizeBrief(cluster, articles, facts) {
     validation_stage: validation.stage,
     source_grades: validation.source_grades,
     blocker: validation.blockers[0] || validation.warnings[0] || null,
+    digest: {
+      title: digest.title,
+      summary: digest.summary,
+      preview: digest.preview,
+      decision: digest.decision,
+    },
     system_status: cluster.status === 'archived'
       ? 'archived'
       : validation.stage === 'ready'

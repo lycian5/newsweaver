@@ -114,6 +114,7 @@ Invoke-Step "Upload Agent Reach scripts and workflows" {
     & scp (Join-Path $ProjectDir "scripts\agent-reach-collect.js") (Join-Path $ProjectDir "scripts\agent-reach-runner.js") (Join-Path $ProjectDir "scripts\collection-notifications.js") (Join-Path $ProjectDir "scripts\keyword-selection.js") (Join-Path $ProjectDir "scripts\research-query-taxonomy.js") (Join-Path $ProjectDir "scripts\backfill-editorial-policy.js") "${RemoteHost}:${RemoteDir}/scripts/"
     & scp (Join-Path $ProjectDir "lib\freeCollection.js") (Join-Path $ProjectDir "lib\editorialPolicy.js") (Join-Path $ProjectDir "lib\koreanNewsRss.js") "${RemoteHost}:${RemoteDir}/lib/"
     & scp (Join-Path $ProjectDir "n8n\workflow_agent_reach_collect.json") "${RemoteHost}:${RemoteDir}/workflows/"
+    & scp (Join-Path $ProjectDir "package.json") "${RemoteHost}:${RemoteDir}/package.json"
 }
 
 $RemoteScript = @'
@@ -125,7 +126,13 @@ chmod 600 .env
 
 echo "==> Install base packages"
 apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release ufw openssl python3 python3-venv nodejs
+apt-get install -y ca-certificates curl gnupg lsb-release ufw openssl python3 python3-venv nodejs npm
+
+echo "==> Install Agent Reach Node dependencies"
+if [ -f /opt/n8n/package.json ]; then
+  cd /opt/n8n
+  npm install --omit=dev
+fi
 
 echo "==> Ensure Docker"
 if ! command -v docker >/dev/null 2>&1; then

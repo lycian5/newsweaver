@@ -19,5 +19,7 @@ assert.match(deploy, /ufw allow from "\$N8N_DOCKER_SUBNET" to any port 8787/);
 assert.match(deploy, /research-query-taxonomy\.js/);
 assert.match(deploy, /collection-notifications\.js/);
 assert.match(deploy, /freeCollection\.js/);
+assert.match(deploy, /package\.json/);
+assert.match(deploy, /npm install --omit=dev/);
 assert.doesNotMatch(deploy, /ufw allow 8787/);
 process.stdout.write('Operations health checks passed.\n');

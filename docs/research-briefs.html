@@ -22,7 +22,7 @@
     .card strong{display:block;color:var(--blue);font-size:22px}
     .card span{font-size:12px;color:var(--muted)}
     .hint{font-size:12px;color:var(--muted);margin:0 0 12px;line-height:1.5}
-    .workspace{display:grid;grid-template-columns:360px minmax(0,1fr);gap:14px}
+    .workspace{display:grid;grid-template-columns:380px minmax(0,1fr);gap:14px}
     .panel{background:#fff;border:1px solid var(--line);border-radius:9px;min-width:0}
     .queue-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
     .queue-head h2,.detail h2{margin:0}
@@ -30,6 +30,7 @@
     .item{display:block;width:100%;background:#fff;border:0;border-bottom:1px solid var(--line);padding:14px;text-align:left}
     .item.active,.item:hover{background:#edf8fb}
     .item strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.42}
+    .blurb{margin:6px 0 0;color:#4e5d66;font-size:12px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .item-meta,.item-bottom,.eyebrow,.article-meta,.history,.cta{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
     .item-meta{margin-top:7px;color:var(--muted);font-size:12px}
     .item-bottom{margin-top:8px}
@@ -41,6 +42,11 @@
     .verdict.reviewable{border-color:#f3d399;background:#fff4dc}
     .verdict.blocked{border-color:#fecaca;background:#fff6f5}
     .verdict h3{margin:0 0 6px;font-size:15px}
+    .summary{font-size:15px;line-height:1.7;margin:0 0 14px}
+    .digest{width:100%;border-collapse:collapse;font-size:13px}
+    .digest th,.digest td{border-top:1px solid #e5edf0;padding:9px 8px;text-align:left;vertical-align:top}
+    .digest th{width:72px;color:#075f7d;font-size:12px}
+    .digest td small{display:block;color:var(--muted);margin-top:3px}
     .cta{margin-bottom:8px}
     .btn{border:0;border-radius:6px;padding:10px 13px;background:var(--blue);color:#fff;font-weight:700;text-decoration:none;cursor:pointer;display:inline-flex;align-items:center}
     .btn.secondary{background:#fff;color:#24313a;border:1px solid #b9c8cf}
@@ -105,7 +111,7 @@
   <div class="wrap">
     <section class="work">
       <button class="card ready" data-quick="ready" type="button"><strong id="metricReady">0</strong><span>지금 작성 가능</span></button>
-      <button class="card" data-quick="needs" type="button"><strong id="metricNeeds">0</strong><span>검토 후 진행</span></button>
+      <button class="card" data-quick="needs" type="button"><strong id="metricNeeds">0</strong><span>작성 보류</span></button>
       <button class="card" data-quick="held" type="button"><strong id="metricHeld">0</strong><span>보류</span></button>
       <a class="card" id="collectionCard" href="/vps-collector"><strong id="collectionStatus">수집 확인</strong><span id="collectionMeta">운영 화면에서 상태 확인</span></a>
     </section>
@@ -185,7 +191,7 @@
       return query;
     }
     function syncUrl(){ history.replaceState(null, '', `${location.pathname}?${currentQuery().toString()}`); }
-    function queueLabel(){ return { ready:'오늘 할 일', needs:'검토 후 진행', held:'보류', today:'오늘 신규' }[quick] || '브리프 선별 큐'; }
+    function queueLabel(){ return { ready:'오늘 할 일', needs:'작성 보류', held:'보류', today:'오늘 신규' }[quick] || '브리프 선별 큐'; }
     async function loadBriefs(preserveSelection){
       const query = currentQuery();
       query.set('view', 'briefs');
@@ -222,7 +228,7 @@
       document.querySelectorAll('[data-quick]').forEach((button) => button.classList.toggle('active', button.dataset.quick === quick));
       $('queueTitle').textContent = queueLabel();
       $('queueHint').textContent = quick === 'ready'
-        ? '기본 큐는 오늘 작성 가능한 소재입니다. 필터는 필요할 때만 엽니다.'
+        ? '왼쪽에서 가능 여부와 요약으로 고르고, 작성 가능이면 바로 초안으로 넘깁니다.'
         : '선택한 조건의 브리프입니다. 작성 가능으로 돌아가려면 위 카드를 누르세요.';
     }
     function renderCollection(collection){
@@ -235,7 +241,8 @@
       $('queueCount').textContent = `${briefs.length}건`;
       $('list').innerHTML = briefs.length ? briefs.map((brief) => {
         const system = systemBadge(brief);
-        return `<button class="item ${selectedId===brief.id?'active':''}" data-id="${brief.id}"><strong>${esc(brief.representative_title)}</strong><div class="item-meta"><span>${label(brief.category)}</span><span>·</span><span>${relativeTime(brief.last_seen_at)}</span></div><div class="item-bottom">${badge(system.label,system.kind)}${badge(editorialLabel(brief.editorial_state),brief.editorial_state==='held'?'warn':'blue')}${badge(`공식 ${brief.official_source_count}`,'good')}${badge(`독립 ${brief.independent_source_count}`)}</div>${brief.blocker?`<div class="item-meta">${esc(brief.blocker)}</div>`:''}</button>`;
+        const digest = brief.digest || {};
+        return `<button class="item ${selectedId===brief.id?'active':''}" data-id="${brief.id}"><strong>${esc(digest.title || brief.representative_title)}</strong><p class="blurb">${esc(digest.preview || digest.summary || brief.blocker || '요약을 확인할 수 없습니다.')}</p><div class="item-bottom">${badge(system.label,system.kind)}${editorialBadges(brief)}${badge(`공식 ${brief.official_source_count}`,'good')}</div></button>`;
       }).join('') : '<div class="empty">조건에 맞는 브리프가 없습니다.</div>';
       document.querySelectorAll('[data-id]').forEach((element) => element.onclick = () => selectBrief(Number(element.dataset.id), true));
     }
@@ -263,64 +270,56 @@
     function renderDetail(){
       const brief = selectedBrief;
       const validation = brief.validation;
-      const articles = showAllSources ? brief.articles : brief.articles.slice(0, 3);
+      const digest = brief.digest || {};
+      const sources = digest.sources || [];
+      const visibleSources = showAllSources ? sources : sources.slice(0, 3);
       const system = systemBadge({ ...brief, preparation_ready: validation.can_prepare, validation_stage: validation.stage });
-      const verdict = verdictCopy(validation);
+      const decision = digest.decision || verdictCopy(validation);
       $('detail').innerHTML = `
         <button class="btn secondary mobile-back" id="back" type="button">목록으로</button>
-        <div class="eyebrow">${badge(label(brief.category),'blue')}${badge(system.label,system.kind)}${badge(editorialLabel(brief.editorial_state),brief.editorial_state==='held'?'warn':'blue')}<span>공식 출처 ${brief.official_source_count}</span><span>독립 발행처 ${brief.independent_source_count}</span><span>최근 갱신 ${relativeTime(brief.last_seen_at)}</span></div>
-        <h2>${esc(brief.representative_title)}</h2>
+        <div class="eyebrow">${badge(label(brief.category),'blue')}${badge(system.label,system.kind)}${editorialBadges(brief)}<span>공식 출처 ${brief.official_source_count}</span><span>독립 발행처 ${brief.independent_source_count}</span><span>최근 갱신 ${relativeTime(brief.last_seen_at)}</span></div>
+        <h2>${esc(digest.title || brief.representative_title)}</h2>
         <div class="verdict ${validation.stage}">
-          <h3>${verdict.title}</h3>
-          <p class="hint" style="margin:0">${esc(verdict.detail)}</p>
+          <h3>${esc(decision.label || verdictCopy(validation).title)}</h3>
+          <p class="hint" style="margin:0">${esc(decision.reason || verdictCopy(validation).detail)}</p>
         </div>
         <div class="cta">${primaryActions(brief, validation)}${secondaryActions(brief)}</div>
-        ${validationHtml(validation)}
-        <section class="detail-section"><h3>확인된 사실</h3>${factsHtml(groupFacts(brief.facts || []))}</section>
-        <section class="detail-section"><h3>근거 출처</h3>${articles.map(articleHtml).join('') || '<p class="muted">근거 기사가 없습니다.</p>'}${brief.articles.length > 3 ? `<button class="btn secondary" id="more" type="button">${showAllSources ? '접기' : `근거 출처 ${brief.articles.length - 3}건 더 보기`}</button>` : ''}</section>
-        <details class="more"><summary>이력·추가 판단 보기</summary>
-          <section class="detail-section" style="border:0;padding-top:10px"><h3>핵심 판단</h3><ul class="judgment">${judgment(brief)}</ul></section>
+        <section class="detail-section"><h3>요약</h3><p class="summary">${esc(digest.summary || '요약할 원문이 부족합니다. 근거 제목과 원문을 확인하세요.')}</p></section>
+        <section class="detail-section"><h3>핵심</h3>${digestTable(digest.highlights || [])}</section>
+        <section class="detail-section"><h3>근거 출처</h3>${visibleSources.map(sourceHtml).join('') || '<p class="muted">근거 기사가 없습니다.</p>'}${sources.length > 3 ? `<button class="btn secondary" id="more" type="button">${showAllSources ? '접기' : `근거 묶음 ${sources.length - 3}개 더 보기`}</button>` : ''}</section>
+        <details class="more"><summary>검증 항목·이력 보기</summary>
+          ${validationHtml(validation)}
           <section class="detail-section"><h3>수집·검토 이력</h3><div class="history">${brief.history.map(historyHtml).join('')}</div></section>
         </details>`;
       bindDetailActions();
     }
     function verdictCopy(validation){
-      if (validation.stage === 'ready') return { title: '바로 초안 가능', detail: '공식·검증 출처와 핵심 사실이 있습니다. 원문 URL을 본문에 유지하면 됩니다.' };
-      if (validation.stage === 'reviewable') return { title: '검토 후 기사 준비 가능', detail: validation.warnings[0] || '경고 항목을 원문에서 확인한 뒤 초안을 준비할 수 있습니다.' };
-      return { title: '기사 준비 차단', detail: validation.blockers[0] || '필수 검증을 통과해야 초안을 준비할 수 있습니다.' };
+      if (validation.stage === 'ready') return { title: '작성 가능', detail: '제목·원문·사용 가능한 출처가 확인되어 바로 초안으로 넘길 수 있습니다.' };
+      if (validation.stage === 'reviewable') return { title: '작성 보류', detail: validation.warnings[0] || '경고 항목을 원문에서 확인한 뒤 초안을 준비할 수 있습니다.' };
+      return { title: '작성 불가', detail: validation.blockers[0] || '필수 검증을 통과해야 초안을 준비할 수 있습니다.' };
+    }
+    function digestTable(rows){
+      if (!rows.length) return '<p class="muted">한눈에 볼 핵심 항목이 없습니다.</p>';
+      return `<table class="digest">${rows.map((row) => `<tr><th>${esc(row.label)}</th><td>${esc(row.value)}${row.detail?`<small>${esc(row.detail)}</small>`:''}${row.official?'<small>공식 확인</small>':''}</td></tr>`).join('')}</table>`;
+    }
+    function sourceHtml(article){
+      return `<article class="article"><a href="${esc(article.url)}" target="_blank" rel="noopener"><strong>${esc(article.label || article.title)}</strong></a><div class="article-meta"><span>등급 ${esc(article.source_grade||'D')}</span><span>·</span><span>발행처 ${esc(article.source_domain||'미상')}</span><span>·</span><span>발견 ${esc(article.source||'수집기')}</span>${article.extra_count?`<span>·</span><span>외 ${article.extra_count}건</span>`:''}</div>${article.summary?`<p>${esc(article.summary)}</p>`:''}</article>`;
     }
     function validationHtml(validation){
       const titles = { ready:'기사 준비 검증 통과', reviewable:'검토 후 기사 준비 가능', blocked:'기사 준비 차단' };
       const checks = validation.checklist || [];
       return `<div class="validation ${validation.stage==='blocked'?'blocked':''}"><h3>${titles[validation.stage]||'기사 준비 검증'}</h3><ul class="checks">${checks.map((item)=>`<li class="${item.status==='block'?'fail':item.status}">${esc(item.label)}</li>`).join('')}</ul>${validation.blockers.length||validation.warnings.length?`<ul class="guidance">${[...validation.blockers,...validation.warnings].map((item)=>`<li>${esc(item)}</li>`).join('')}</ul>`:''}</div>`;
     }
-    function judgment(brief){
-      const items = (brief.facts || []).slice(0, 3).map((fact) => `<li>${esc(fact.fact_text)}</li>`);
-      if (!items.length && brief.articles?.[0]?.summary) items.push(`<li>${esc(brief.articles[0].summary)}</li>`);
-      if (!items.length) items.push('<li>근거 기사 원문에서 핵심 사실을 먼저 확인하세요.</li>');
-      return items.join('');
-    }
-    function groupFacts(facts){
-      const labels = { date:'날짜', number:'수치', organization:'기관', person:'인물', quote:'인용', claim:'주장', location:'장소' };
-      return facts.reduce((groups, fact) => { const key = labels[fact.fact_type] || '기타'; (groups[key] ||= []).push(fact); return groups; }, {});
-    }
-    function factsHtml(groups){
-      const entries = Object.entries(groups);
-      if (!entries.length) return '<p class="muted">추출된 사실이 없습니다.</p>';
-      return entries.map(([type, facts]) => `<section class="fact-group"><h4>${type}</h4>${facts.map((fact)=>`<div class="fact">${esc(fact.fact_text)} ${fact.source_url?`<a href="${esc(fact.source_url)}" target="_blank" rel="noopener">근거</a>`:''}<small>${fact.is_official?'공식 확인':`신뢰도 ${Math.round(Number(fact.confidence||0)*100)}%`}</small></div>`).join('')}</section>`).join('');
-    }
-    function articleHtml(article){
-      return `<article class="article"><a href="${esc(article.url)}" target="_blank" rel="noopener"><strong>${esc(article.title)}</strong></a><div class="article-meta"><span>등급 ${esc(article.source_grade||'D')}</span><span>·</span><span>발행처 ${esc(article.source_domain||'미상')}</span><span>·</span><span>발견 ${esc(article.source||'수집기')}</span><span>·</span><span>품질 ${article.quality_score||0}</span><span>·</span><span>${esc(article.verification_status||'미확인')}</span></div>${article.summary?`<p>${esc(article.summary)}</p>`:''}</article>`;
-    }
     function historyHtml(item){ return `<div><strong>${esc(item.label)}</strong><span>${item.at?formatDate(item.at):'초안 화면에서 계속'}</span></div>`; }
     function primaryActions(brief, validation){
       if (brief.editorial_state === 'prepared' && brief.prepared_draft_id) return `<a class="btn" href="/coanews-draft?draft=${encodeURIComponent(brief.prepared_draft_id)}">기사 초안 열기</a>`;
+      if (validation.stage === 'ready') return `<button class="btn" id="prepare" type="button">바로 기사 작성</button>`;
       if (brief.editorial_state === 'unreviewed') return '<button class="btn" id="startReview" type="button">검토 시작</button>';
       if (brief.editorial_state === 'held') return '<button class="btn" id="resumeReview" type="button">검토 재개</button>';
       return `<button class="btn" id="prepare" type="button" ${validation.can_prepare?'':'disabled'}>${validation.stage==='reviewable'?'검토 조건으로 기사 초안 준비':'검증 후 기사 초안 준비'}</button>`;
     }
     function secondaryActions(brief){
-      const hold = brief.editorial_state === 'reviewing' ? '<button class="btn secondary" id="hold" type="button">보류</button>' : '';
+      const hold = ['unreviewed', 'reviewing'].includes(brief.editorial_state) ? '<button class="btn secondary" id="hold" type="button">보류</button>' : '';
       return `${hold}<button class="btn secondary" id="copy" type="button">브리프 복사</button><details class="overflow"><summary class="btn secondary">더보기</summary><div><button class="btn secondary danger" id="archive" type="button">보관</button></div></details>`;
     }
     function bindDetailActions(){
@@ -346,7 +345,7 @@
     async function prepareDraft(){
       const validation = selectedBrief.validation;
       if (!validation.can_prepare) return;
-      if (validation.warnings.length && !confirm(`검토 경고가 ${validation.warnings.length}건 있습니다. 원문을 다시 확인하면서 기사 초안을 준비할까요?`)) return;
+      if (validation.stage !== 'ready' && validation.warnings.length && !confirm(`검토 경고가 ${validation.warnings.length}건 있습니다. 원문을 다시 확인하면서 기사 초안을 준비할까요?`)) return;
       const button = $('prepare');
       button.disabled = true;
       button.textContent = '초안 준비 중';
@@ -358,13 +357,27 @@
         location.href = `/coanews-draft?draft=${encodeURIComponent(data.draft.id)}`;
       } catch (error) {
         button.disabled = false;
-        button.textContent = '기사 초안 준비';
+        button.textContent = selectedBrief.validation?.stage === 'ready' ? '바로 기사 작성' : '기사 초안 준비';
         toast(error.message, true);
       }
     }
     async function copyBrief(){
       const brief = selectedBrief;
-      const text = [brief.representative_title, `분야: ${label(brief.category)}`, '', '[확인된 사실]', ...(brief.facts || []).map((fact) => `- ${fact.fact_text}`), '', '[근거 기사]', ...(brief.articles || []).map((article) => `- ${article.title}\n  ${article.url}`)].join('\n');
+      const digest = brief.digest || {};
+      const text = [
+        digest.title || brief.representative_title,
+        `분야: ${label(brief.category)}`,
+        digest.decision ? `판단: ${digest.decision.label}` : '',
+        '',
+        '[요약]',
+        digest.summary || '',
+        '',
+        '[핵심]',
+        ...(digest.highlights || []).map((row) => `- ${row.label}: ${row.value}`),
+        '',
+        '[근거]',
+        ...(digest.sources || []).map((article) => `- ${article.label || article.title}\n  ${article.url || ''}`),
+      ].filter((line, index, lines) => line !== '' || lines[index - 1] !== '').join('\n');
       try { await navigator.clipboard.writeText(text); toast('브리프를 복사했습니다.'); }
       catch (_) { toast('브리프를 복사하지 못했습니다.', true); }
     }
@@ -378,12 +391,24 @@
     function renderEmptyDetail(message){ selectedBrief = null; $('detail').innerHTML = `<div class="empty">${esc(message)}</div>`; }
     function systemBadge(brief){
       if (brief.status === 'archived') return { label:'보관', kind:'bad' };
+      const decision = brief.digest?.decision;
+      if (decision?.label) {
+        if (decision.allowed && decision.needs_source_read) return { label: decision.label, kind:'warn' };
+        if (decision.allowed) return { label: decision.label, kind:'good' };
+        return { label: decision.label, kind: brief.validation_stage === 'blocked' ? 'bad' : 'warn' };
+      }
       if (brief.validation_stage === 'ready' || brief.system_status === 'ready') return { label:'작성 가능', kind:'good' };
-      if (brief.validation_stage === 'reviewable' || brief.system_status === 'reviewable') return { label:'검토 후 진행', kind:'warn' };
+      if (brief.validation_stage === 'reviewable' || brief.system_status === 'reviewable') return { label:'작성 보류', kind:'warn' };
       if (brief.status === 'developing' && !brief.preparation_ready) return { label:'수집 중', kind:'blue' };
-      return { label:'검증 필요', kind:'bad' };
+      return { label:'작성 불가', kind:'bad' };
     }
-    function editorialLabel(value){ return { unreviewed:'미검토', reviewing:'검토 중', held:'보류', prepared:'초안 전환' }[value] || '미검토'; }
+    function editorialBadges(brief){
+      if (brief.editorial_state === 'held') return badge('보류','warn');
+      if (brief.editorial_state === 'prepared') return badge('초안 전환','blue');
+      if (brief.editorial_state === 'reviewing') return badge('검토 중','blue');
+      if (brief.digest?.decision?.allowed || brief.validation_stage === 'ready' || brief.system_status === 'ready') return badge('바로 작성','blue');
+      return '';
+    }
     function badge(text, kind=''){ return `<span class="badge ${kind}">${esc(text)}</span>`; }
     function label(value){ return { ai_business:'AI 비즈니스', startup:'창업·부업', policy:'정책·지원사업', small_business_economy:'소상공인 경제', local_commerce:'지역 상권', marketing_distribution:'마케팅·유통', field_issue:'현장 이슈' }[value] || value; }
     function esc(value){ return String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }

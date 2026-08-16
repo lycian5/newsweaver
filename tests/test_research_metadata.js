@@ -4,6 +4,7 @@ const {
   buildRedditSearchQuery,
   classifySource,
   dateDistanceDays,
+  ensureEventFingerprint,
   eventFingerprint,
   extractFacts,
   isOfficialDomain,
@@ -57,6 +58,19 @@ assert.equal(
   eventFingerprint('AI 기업 투자 발표', '2026-07-12T01:00:00Z', 'ai_business'),
   eventFingerprint('발표, 투자 AI 기업', '2026-07-12T22:00:00Z', 'ai_business')
 );
+const missingFingerprint = {
+  category: 'policy',
+  title: '(동정) 해양수산부, 천일염 산업의 지속가능한 발전 방안 논의',
+  published_at: null,
+  collected_at: '2026-08-16T08:41:41.596197+00:00',
+};
+assert.equal(ensureEventFingerprint(missingFingerprint), eventFingerprint(
+  missingFingerprint.title,
+  missingFingerprint.collected_at,
+  missingFingerprint.category
+));
+assert.ok(missingFingerprint.event_fingerprint);
+assert.equal(ensureEventFingerprint({ event_fingerprint: 'kept' }), 'kept');
 assert.ok(titleSimilarity('오픈AI GPT-6 기업용 에이전트 출시', '오픈AI, 기업용 GPT-6 에이전트 공개') >= 0.55);
 assert.equal(titleSimilarity('중소기업 정책자금 접수 시작', 'AI 반도체 투자 확대'), 0);
 assert.equal(dateDistanceDays('2026-07-12', '2026-07-13'), 1);
