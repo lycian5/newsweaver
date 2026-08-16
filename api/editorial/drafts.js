@@ -37,6 +37,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET' && req.query?.view === 'brief') return getBrief(req, res);
     if (req.method === 'GET' && req.query?.view === 'keywords') return listKeywords(req, res);
     if (req.method === 'GET' && req.query?.view === 'rising-keywords') return listRisingKeywords(req, res);
+    if (req.method === 'GET' && req.query?.view === 'collection-status') return listCollectionStatus(req, res);
     if (req.method === 'GET') return listDrafts(req, res);
     if (req.method === 'POST' && req.body?.action === 'prepare') return prepareArticleDraft(req, res);
     if (req.method === 'POST' && req.body?.action === 'ai_generate') return generateDraftWithAi(req, res);
@@ -127,6 +128,99 @@ async function listRisingKeywords(req, res) {
     (articles || []).map((article) => ({ ...article, keyword: article.tracked_keywords?.keyword }))
   );
   res.status(200).json({ date: new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10), items });
+}
+
+async function listCollectionStatus(req, res) {
+  const supabase = getSupabase();
+  const koreaDate = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const startAt = new Date(`${koreaDate}T00:00:00+09:00`).toISOString();
+  const { data, error } = await supabase
+    .from('collection_runs')
+    .select('id,collector,trigger,collection_mode,status,sources,stored_count,discovered_count,ready_brief_count,source_failures,recovery_reason,started_at,completed_at')
+    .gte('started_at', startAt)
+    .order('started_at', { ascending: false })
+    .limit(30);
+  if (error) throw error;
+
+  const runs = data || [];
+  const primary = firstRun(runs, (run) => run.collector === 'vercel_cron' && run.collection_mode !== 'previous_day_recovery');
+  const recovery = firstRun(runs, (run) => run.collection_mode === 'previous_day_recovery' || run.trigger === 'recovery');
+  const agentReach = firstRun(runs, (run) => run.collector === 'agent_reach');
+  const koreaHour = new Date(Date.now() + 9 * 60 * 60 * 1000).getUTCHours();
+
+  res.status(200).json({
+    date: koreaDate,
+    primary: summarizeDayRun(primary, {
+      waitingLabel: koreaHour < 8 ? '대기' : '미실행',
+      emptyTitle: koreaHour < 8 ? '아직 실행 전' : '오늘 기록이 없습니다',
+    }),
+    recovery: recovery
+      ? summarizeDayRun(recovery, {})
+      : skippedRecovery(primary),
+    agentReach: summarizeDayRun(agentReach, {
+      waitingLabel: koreaHour < 16 ? '대기' : '미실행',
+      emptyTitle: koreaHour < 16 ? '오후 보강 전' : '오늘 기록이 없습니다',
+    }),
+  });
+}
+
+function firstRun(runs, match) {
+  return (runs || []).find(match) || null;
+}
+
+function skippedRecovery(primary) {
+  if (primary && ['succeeded', 'partial'].includes(primary.status)) {
+    return {
+      kind: 'skip',
+      label: '건너뜀',
+      title: '재수집 없음',
+      detail: '주수집이 정상이라 보정하지 않았습니다.',
+      stored: 0,
+      completedAt: null,
+      sources: [],
+    };
+  }
+  return {
+    kind: 'idle',
+    label: '대기',
+    title: '보정 전',
+    detail: '주수집 결과에 따라 09시대에만 실행됩니다.',
+    stored: 0,
+    completedAt: null,
+    sources: [],
+  };
+}
+
+function summarizeDayRun(run, { waitingLabel = '대기', emptyTitle = '오늘 기록이 없습니다' } = {}) {
+  if (!run) {
+    return {
+      kind: waitingLabel === '미실행' ? 'warn' : 'idle',
+      label: waitingLabel,
+      title: emptyTitle,
+      detail: waitingLabel === '미실행' ? '오늘 실행 기록이 없습니다.' : '예정 시각 전입니다.',
+      stored: 0,
+      completedAt: null,
+      sources: [],
+    };
+  }
+  const failures = Array.isArray(run.source_failures) ? run.source_failures.length : 0;
+  const kind = run.status === 'succeeded' ? 'ok' : run.status === 'running' ? 'idle' : 'warn';
+  const labels = { succeeded: '성공', partial: '부분 실패', failed: '실패', running: '실행 중' };
+  return {
+    kind,
+    label: labels[run.status] || run.status,
+    title: `${Number(run.stored_count || 0)}건 저장`,
+    detail: [
+      (run.sources || []).join(' · ') || '출처 없음',
+      run.completed_at || run.started_at,
+      failures ? `실패 ${failures}건` : '실패 없음',
+      run.ready_brief_count ? `브리프 ${run.ready_brief_count}건` : '',
+      run.recovery_reason || '',
+    ].filter(Boolean).join(' · '),
+    stored: Number(run.stored_count || 0),
+    completedAt: run.completed_at || run.started_at,
+    sources: run.sources || [],
+  };
 }
 
 async function listBriefs(req, res) {

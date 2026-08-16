@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>리서치 브리프 목업 — COA NEWS</title>
+  <style>
+    :root{font-family:Arial,"Noto Sans KR",sans-serif;color:#18212a;background:#f4f7f8;--blue:#087ea4;--line:#d8e1e5;--muted:#65747d;--good:#087a43;--warn:#a15c00;--bad:#b42318}
+    *{box-sizing:border-box}body{margin:0}
+    .banner{background:#111b22;color:#d9edf4;padding:10px 20px;font-size:13px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .banner a{color:#7dd3fc;font-weight:700}
+    .top{background:var(--blue);color:#fff;padding:16px 24px}
+    .top-in{max-width:1320px;margin:0 auto;display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
+    .top h1{font-size:21px;margin:0}.top p{margin:5px 0 0;font-size:13px;color:#d9f4fb}
+    .nav{display:flex;gap:8px;flex-wrap:wrap}
+    .nav a{border:1px solid rgba(255,255,255,.45);color:#fff;padding:8px 11px;border-radius:6px;font-weight:700;font-size:13px;text-decoration:none}
+    .nav a.active{background:#fff;color:var(--blue);border-color:#fff}
+    .wrap{max-width:1320px;margin:0 auto;padding:16px}
+    .work{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+    .card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px;text-align:left}
+    .card.active{outline:2px solid var(--blue)}
+    .card strong{display:block;color:var(--blue);font-size:22px}
+    .card span{font-size:12px;color:var(--muted)}
+    .card.ready{background:#e8f6ee}
+    .hint{font-size:12px;color:var(--muted);margin:0 0 12px}
+    .workspace{display:grid;grid-template-columns:360px minmax(0,1fr);gap:14px}
+    .panel{background:#fff;border:1px solid var(--line);border-radius:9px;min-width:0}
+    .queue-head,.detail{padding:16px}
+    .queue-head{border-bottom:1px solid var(--line);display:flex;justify-content:space-between}
+    .item{display:block;width:100%;border:0;border-bottom:1px solid var(--line);background:#fff;padding:13px;text-align:left}
+    .item.active{background:#edf8fb}
+    .item strong{display:block;line-height:1.4}
+    .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;color:var(--muted);font-size:12px}
+    .badge{display:inline-flex;font-size:11px;padding:3px 7px;border-radius:4px;background:#edf2f4}
+    .badge.good{background:#e8f6ee;color:var(--good)}
+    .badge.warn{background:#fff4dc;color:var(--warn)}
+    .badge.blue{background:#e5f4f9;color:#075f7d}
+    .verdict{border:1px solid #b7e4c7;background:#e8f6ee;border-radius:7px;padding:13px;margin:8px 0 16px}
+    .verdict h3{margin:0 0 6px;font-size:15px}
+    .cta{display:flex;gap:8px;margin-bottom:18px}
+    .btn{border:0;border-radius:6px;padding:10px 13px;background:var(--blue);color:#fff;font-weight:700;text-decoration:none}
+    .btn.secondary{background:#fff;color:#24313a;border:1px solid #b9c8cf}
+    .section{border-top:1px solid var(--line);padding-top:14px;margin-top:14px}
+    .section h3{margin:0 0 8px;font-size:14px}
+    details.more{margin-top:12px}
+    details.more summary{cursor:pointer;color:var(--muted);font-size:13px}
+    .filters{display:none;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 0}
+    details.more[open] .filters{display:grid}
+    .filters input,.filters select{border:1px solid #b9c8cf;border-radius:6px;padding:9px;background:#fff;width:100%}
+    @media(max-width:800px){.work,.workspace,.filters{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <span>리서치 브리프 제안 목업입니다. 실제 `/research-briefs`는 아직 바꾸지 않았습니다.</span>
+    <a href="/research-briefs">현재 화면 열기</a>
+  </div>
+  <header class="top">
+    <div class="top-in">
+      <div>
+        <h1>리서치 브리프</h1>
+        <p>오늘 쓸 소재를 먼저 고르고, 검증된 것만 초안으로 넘깁니다.</p>
+      </div>
+      <nav class="nav">
+        <a href="/vps-collector">수집 운영</a>
+        <a class="active" href="/research-briefs-mockup">리서치 브리프</a>
+        <a href="/coanews-draft">기사 초안</a>
+      </nav>
+    </div>
+  </header>
+  <div class="wrap">
+    <section class="work">
+      <button class="card ready active"><strong>7</strong><span>지금 작성 가능</span></button>
+      <button class="card"><strong>11</strong><span>검토 후 진행</span></button>
+      <button class="card"><strong>3</strong><span>보류</span></button>
+      <button class="card"><strong>수집 정상</strong><span>16:41 갱신 · 운영 화면</span></button>
+    </section>
+    <p class="hint">기본 큐는 오늘 작성 가능한 소재입니다. 필터는 필요할 때만 엽니다.</p>
+    <main class="workspace">
+      <section class="panel">
+        <div class="queue-head"><h2>오늘 할 일</h2><span>7건</span></div>
+        <button class="item active"><strong>소상공인 폐업공제금 16% 증가</strong><div class="meta"><span class="badge good">작성 가능</span><span class="badge blue">정책</span><span>공식 2 · 독립 3</span></div></button>
+        <button class="item"><strong>생성형 AI 매장 운영 도입 사례</strong><div class="meta"><span class="badge good">작성 가능</span><span class="badge blue">AI</span><span>공식 1 · 독립 2</span></div></button>
+        <button class="item"><strong>전통시장 배달 수수료 분담 논의</strong><div class="meta"><span class="badge warn">검토 후 진행</span><span class="badge blue">상권</span><span>독립 1</span></div></button>
+        <details class="more" style="padding:12px">
+          <summary>필터 더 보기</summary>
+          <div class="filters">
+            <input placeholder="제목 검색" />
+            <select><option>최근 24시간</option></select>
+            <select><option>미검토</option></select>
+            <select><option>선별 우선</option></select>
+          </div>
+        </details>
+      </section>
+      <section class="panel detail">
+        <div class="meta"><span class="badge blue">정책·지원사업</span><span class="badge good">작성 가능</span><span>오늘 07:18 수집</span></div>
+        <h2 style="margin:8px 0 0;font-size:24px;line-height:1.35">소상공인 폐업공제금, 폐업 수는 줄고 지급액은 늘었다</h2>
+        <div class="verdict">
+          <h3>바로 초안 가능</h3>
+          <p class="hint" style="margin:0">공식 원문과 수치·기관 사실이 있습니다. 원문 URL을 본문에 유지하면 됩니다.</p>
+        </div>
+        <div class="cta">
+          <a class="btn" href="/coanews-draft">기사 초안 준비</a>
+          <button class="btn secondary" type="button">보류</button>
+        </div>
+        <section class="section">
+          <h3>확인된 사실</h3>
+          <p>올해 1~5월 폐업 33만 2341개 · 전년 대비 11% 감소</p>
+          <p>노란우산 폐업공제금 15.8% 증가</p>
+        </section>
+        <section class="section">
+          <h3>근거 출처</h3>
+          <p>뉴스1 · 등급 A · 공식 확인</p>
+          <p>중소벤처기업부 보도자료 · 등급 A</p>
+        </section>
+        <details class="more">
+          <summary>이력·추가 출처 보기</summary>
+          <p class="hint">수집 07:18 · 클러스터 갱신 16:41 · 검토 시작 전</p>
+        </details>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
