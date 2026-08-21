@@ -8,6 +8,7 @@ const legacyCollect = JSON.parse(fs.readFileSync(require.resolve('../n8n/workflo
 const legacySuggest = JSON.parse(fs.readFileSync(require.resolve('../n8n/workflow_suggest.json'), 'utf8'));
 const standard = fs.readFileSync(require.resolve('../docs/OPERATING_STANDARD.md'), 'utf8');
 const review = fs.readFileSync(require.resolve('../docs/REVIEW.md'), 'utf8');
+const collectorPage = fs.readFileSync(require.resolve('../docs/vps-collector.html'), 'utf8');
 const deployReadme = fs.readFileSync(require.resolve('../deploy/n8n/README.md'), 'utf8');
 
 assert.match(baseCollector, /BASE_COLLECT_LIMIT_KEYWORDS \|\| 18/);
@@ -53,5 +54,12 @@ assert.match(review, /주제 제안/);
 assert.doesNotMatch(standard, /맥락 요약/);
 assert.doesNotMatch(deployReadme, /맥락 요약/);
 assert.match(standard, /원시 수집 단계에서는 OpenAI를 호출하지 않습니다/);
+assert.match(collectorPage, /주제 제안/);
+assert.match(collectorPage, /보강·클러스터·요약 검토/);
+assert.doesNotMatch(collectorPage, /브리프 검토/);
+assert.match(deployReadme, /주제 제안/);
+assert.doesNotMatch(deployReadme, /소재 정리/);
+assert.match(agentCollector, /reviewBriefsAfterCollection/);
+assert.doesNotMatch(baseCollector, /openai/i);
 
 process.stdout.write('Operating standard checks passed.\n');

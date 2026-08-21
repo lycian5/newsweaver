@@ -32,10 +32,13 @@ assert.doesNotMatch(prepareRunnerCode, /fetch\(scheduleUrl\)/);
 assert.match(alignmentMigration, /daily_time set default '16:30'/);
 assert.match(alignmentMigration, /values \('agent_reach', true, '16:30'/);
 assert.match(dashboard, /\/api\/operations\/schedule/);
-assert.match(dashboard, /자동운영 일정/);
+assert.match(dashboard, /하루 일정/);
+assert.match(dashboard, /자동 수집 사용/);
 assert.match(dashboard, /07:10/);
 assert.match(dashboard, /09:00/);
 assert.match(dashboard, /16:30/);
+assert.match(dashboard, /주제 제안/);
+assert.doesNotMatch(dashboard, /브리프 검토/);
 
 const vercel = JSON.parse(fs.readFileSync(require.resolve('../vercel.json'), 'utf8'));
 assert.deepEqual(vercel.crons.find((cron) => cron.path === '/api/cron/collect'), {

@@ -52,15 +52,15 @@ ssh -L 5678:127.0.0.1:5678 root@158.247.245.66
 
 - Vercel 전날 마감 수집: 매일 07:10 KST가 속한 시간대, 전날 발행분, Naver·Google·Bing과 국내 언론 RSS, 18개 키워드
 - 조건부 누락 보정: 매일 09:00 KST가 속한 시간대, 실패·부분 실패·저수집일 때만 재수집
-- VPS Agent Reach: 매일 16:30 KST, Exa, 공식 출처, 국내·해외 RSS, 54개 키워드
-- 소재 정리: 매일 17:30 KST, 중복 제거, 점수화, 클러스터 및 브리프 생성
-- 원시 수집에는 OpenAI를 사용하지 않습니다. AI는 기사 초안 보조와 근거 검증에만 씁니다.
+- VPS Agent Reach: 매일 16:30 KST, Exa, 공식 출처, 국내·해외 RSS, 54개 키워드. 저장 후 클러스터·브리프 갱신, 이어서 요약 AI 검토
+- 주제 제안: 매일 17:30 KST, Vercel `/api/cron/suggest`. 브리프 큐와 무관한 보조
+- 원시 수집에는 OpenAI를 사용하지 않습니다. OpenAI는 Agent Reach 이후 브리프 요약 검토와 기사 초안 보조에만 씁니다.
 - `n8n/workflow_collect.json`과 `n8n/workflow_suggest.json`은 보관용이며 활성화하지 않음
 - 현재 출처와 점검 순서는 [`../../docs/REVIEW.md`](../../docs/REVIEW.md)를 봅니다.
 
 `workflow_agent_reach_collect.json`을 n8n에 import한 경우 환경변수를 확인한 뒤 이 워크플로를 활성 상태로 유지합니다.
 
-자동 수집 시간은 `/vps-collector`의 `자동 수집 일정`에서 설정합니다. 이 워크플로는 5분마다 Supabase 설정을 확인해 선택한 KST 시각에만 실행합니다. 배포 후 `workflows/workflow_agent_reach_collect.json`을 n8n에 다시 import하고 기존 Agent Reach 워크플로를 교체한 뒤 활성화합니다.
+자동 수집 시간은 `/vps-collector`의 `하루 일정`에서 설정합니다. 이 워크플로는 5분마다 Supabase 설정을 확인해 선택한 KST 시각에만 실행합니다. 배포 후 `workflows/workflow_agent_reach_collect.json`을 n8n에 다시 import하고 기존 Agent Reach 워크플로를 교체한 뒤 활성화합니다.
 
 ## 백업과 복원
 
