@@ -23,4 +23,6 @@ assert.match(deploy, /package\.json/);
 assert.match(deploy, /npm install --omit=dev/);
 assert.match(deploy, /briefSummaryReviewJob\.js/);
 assert.doesNotMatch(deploy, /ufw allow 8787/);
+assert.doesNotMatch(deploy, /nodejs npm/);
+assert.match(deploy, /command -v npm/);
 process.stdout.write('Operations health checks passed.\n');

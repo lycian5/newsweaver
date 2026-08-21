@@ -126,7 +126,14 @@ chmod 600 .env
 
 echo "==> Install base packages"
 apt-get update
-apt-get install -y ca-certificates curl gnupg lsb-release ufw openssl python3 python3-venv nodejs npm
+apt-get install -y ca-certificates curl gnupg lsb-release ufw openssl python3 python3-venv
+if ! command -v node >/dev/null 2>&1; then
+  apt-get install -y nodejs
+fi
+if ! command -v npm >/dev/null 2>&1; then
+  echo "[ERROR] npm is missing. Install Node.js with npm (NodeSource includes npm; do not install the Ubuntu npm package next to it)." >&2
+  exit 1
+fi
 
 echo "==> Install Agent Reach Node dependencies"
 if [ -f /opt/n8n/package.json ]; then
