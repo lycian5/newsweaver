@@ -5,7 +5,7 @@
 - 기준일: 2026-08-16
 - 수집 확장: `acc13f0`
 - 수집 운영 화면: `6dd491a`
-- 리서치 브리프 화면: `678a984`
+- 리서치 브리프·요약 AI 검토: `451b604` 이후 `main`
 - 운영 화면: `https://newsweaver.vercel.app`
 - VPS n8n: `https://n8n.coanews.co.kr`
 
@@ -16,8 +16,8 @@
 ```text
 07:10 KST  주수집         Naver + Google + Bing + 국내 RSS + 정책/공공데이터
 09:00 KST  보정           주수집 실패·저수집일 때만 같은 파이프라인 재실행
-16:30 KST  Agent Reach    Exa + 공식 도메인 + 국내·해외 RSS (+선택 Reddit), 이어서 요약 AI 검토
-17:30 KST  소재 정리      중복 제거, 점수, 클러스터, 브리프
+16:30 KST  Agent Reach    Exa + 공식 도메인 + 국내·해외 RSS, 클러스터·브리프, 이어서 요약 AI 검토
+17:30 KST  주제 제안      Vercel suggest cron. 브리프와 무관한 보조
 이후      사람 작업      가능 소재 선별 → 초안 → 승인 → ZIP 수동 등록
 ```
 
@@ -41,16 +41,17 @@
 
 수집 운영 화면은 자동이 기본입니다. 채널·결과 수·직접 키워드는 접힌 수동 실행에만 쓰이며 내일 자동 수집을 바꾸지 않습니다. 16:30만 이 화면에서 바꿉니다. 07:10·09:00은 Vercel cron 고정입니다.
 
-리서치 브리프는 작성 가능 / 작성 보류 / 보류 카드가 기본이고, 필터는 접혀 있습니다. 목록에 두 줄 요약이 있습니다. 규칙으로 기간·출처를 본 뒤, 수집이 끝나면 AI(`gpt-5-mini`)가 요약을 검토해 가능/보류를 다시 나눕니다. 작성 가능이면 바로 초안으로 넘깁니다. 수집 상태 카드를 누르면 수집 운영으로 갑니다.
+리서치 브리프는 작성 가능 / 작성 보류 / 보류 카드가 기본이고, 필터는 접혀 있습니다. **작성 보류**는 규칙·AI 판정이고, **보류**는 담당자가 버튼을 누른 상태입니다. 기본 목록은 최근 수집 24시간이며, 작성 가능의 기간 규칙은 발행일 7일입니다. 목록에 두 줄 요약이 있습니다. 규칙으로 기간·출처를 본 뒤, 16:30 수집이 끝나면 AI(`gpt-5-mini`)가 요약을 검토해 가능/보류를 다시 나눕니다. 작성 가능이면 바로 초안으로 넘깁니다. 수집 상태 카드를 누르면 수집 운영으로 갑니다.
 
 ## 3. 5분 점검
 
 1. https://newsweaver.vercel.app/vps-collector 에서 오늘 주수집·보정·Agent Reach 상태를 봅니다.
-2. https://newsweaver.vercel.app/research-briefs 에서 작성 가능 소재가 보이는지 확인합니다.
+2. https://newsweaver.vercel.app/research-briefs 에서 작성 가능 소재와 요약 확인 배지가 보이는지 확인합니다.
 3. VPS: `systemctl is-active coa-agent-reach-runner`가 `active`이고 `curl 127.0.0.1:8787/health`가 `ok`인지 확인합니다. 수집이 안 돌면 `active: false`는 정상입니다.
-4. 코드: `api/cron/collect.js`에 `searchBingNews`, `fetchKoreanNewsRss`가 있는지 확인합니다.
-5. 코드: `scripts/agent-reach-collect.js`가 `lib/koreanNewsRss.js`의 `DEFAULT_FEEDS`를 합치는지 확인합니다.
-6. 데이터: `raw_articles.source`에 `bing_news`, `korean_news_rss:*`, `agent_reach_rss:*`가 생기는지 확인합니다.
+4. VPS `/opt/n8n/.env`에 `OPENAI_API_KEY`가 있고 `AI_ENABLED`가 `false`가 아닌지 확인합니다. 없으면 요약 AI 검토가 건너뛰어집니다.
+5. 코드: `api/cron/collect.js`에 `searchBingNews`, `fetchKoreanNewsRss`가 있는지 확인합니다.
+6. 코드: `scripts/agent-reach-collect.js`가 `lib/koreanNewsRss.js`의 `DEFAULT_FEEDS`를 합치고 `reviewBriefsAfterCollection`을 호출하는지 확인합니다.
+7. 데이터: `raw_articles.source`에 `bing_news`, `korean_news_rss:*`, `agent_reach_rss:*`가 생기는지 확인합니다.
 
 ## 4. 현재 수집 출처
 
@@ -79,6 +80,7 @@ Agent Reach: Exa, 공식 도메인 검색, 해외 기술 RSS + 같은 국내 RSS
 | Bing 검색 | `lib/bingNews.js` |
 | 국내 언론 RSS | `lib/koreanNewsRss.js` |
 | Agent Reach 수집 | `scripts/agent-reach-collect.js` |
+| 브리프 요약·AI 재분류 | `lib/briefDigest.js`, `lib/briefSummaryReviewJob.js` |
 | 공식 도메인 검색어 | `scripts/research-query-taxonomy.js` |
 | 오늘 수집 상태 API | `api/editorial/drafts.js` `view=collection-status` |
 | 수집 운영 화면 | `docs/vps-collector.html` |
@@ -109,7 +111,7 @@ AGENT_REACH_KR_NEWS_RSS=false
 ## 7. 배포
 
 - Vercel: `main` 푸시 후 Production 배포. 정적 출력은 `docs/`.
-- VPS: `deploy/n8n/deploy.ps1`. `lib/koreanNewsRss.js`를 `/opt/n8n/lib/`에 올립니다. 이 파일이 빠지면 Agent Reach RSS가 실패합니다.
+- VPS: `deploy/n8n/deploy.ps1`. `lib/koreanNewsRss.js`와 브리프 검토용 `briefDigest.js`, `briefSummaryReviewJob.js`, `editorialAi*.js`, `openai.js`를 `/opt/n8n/lib/`에 올립니다. RSS 파일이 빠지면 국내 RSS가 실패하고, 검토 파일이 빠지면 수집은 되더라도 요약 AI 검토가 실패합니다.
 
 ## 8. 레거시
 
