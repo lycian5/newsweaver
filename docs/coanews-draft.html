@@ -27,6 +27,10 @@
     button:disabled { cursor:not-allowed; opacity:.45; }
     .topbar { position:sticky; top:0; z-index:20; background:#fff; border-bottom:1px solid var(--line); }
     .topbar-inner { max-width:1280px; margin:0 auto; min-height:64px; padding:10px 24px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+    .topbar-nav { max-width:1280px; margin:0 auto; padding:0 24px 12px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .topbar-nav a,.topbar-nav button { border:1px solid #cbd5e1; background:#fff; color:#334155; padding:8px 11px; border-radius:6px; font-weight:700; font-size:13px; text-decoration:none; cursor:pointer; }
+    .topbar-nav a.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .topbar-nav a:hover:not(.active),.topbar-nav button:hover { border-color:var(--accent); color:var(--accent); }
     .brand h1 { margin:0; font-size:19px; }
     .brand p { margin:3px 0 0; color:var(--muted); font-size:12px; }
     .status { display:inline-flex; align-items:center; gap:7px; color:var(--good); font-size:12px; font-weight:700; }
@@ -73,7 +77,7 @@
     .btn-outline { border-color:#cbd5e1; color:#334155; }
     .btn-outline:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
     .btn-danger { border-color:#fecaca; color:var(--danger); }
-    .side { position:sticky; top:82px; }
+    .side { position:sticky; top:142px; }
     .side-section { padding:16px; border-bottom:1px solid var(--line); }
     .side-section:last-child { border-bottom:0; }
     .side h2 { font-size:14px; margin:0 0 12px; }
@@ -102,6 +106,7 @@
       .layout { grid-template-columns:1fr; padding:14px; }
       .side { position:static; }
       .topbar-inner { padding:10px 14px; }
+      .topbar-nav { padding:0 14px 12px; }
     }
     @media (max-width:640px) {
       .grid-2,.grid-3,.toggle-grid { grid-template-columns:1fr; }
@@ -120,6 +125,13 @@
       </div>
       <span class="status" id="workflowStatus">작성 중</span>
     </div>
+    <nav class="topbar-nav" aria-label="운영 화면">
+      <a href="/vps-collector">수집 운영</a>
+      <a href="/research-briefs">리서치 브리프</a>
+      <a class="active" href="/coanews-draft" aria-current="page">기사 초안</a>
+      <button id="refresh" type="button">새로고침</button>
+      <button id="logout" type="button">로그아웃</button>
+    </nav>
   </header>
 
   <main class="layout">
@@ -1048,6 +1060,14 @@
     }
 
     async function init() {
+      const tenantId = new URLSearchParams(location.search).get('tenant_id') || 'coa_news';
+      document.querySelectorAll('.topbar-nav a').forEach((link) => {
+        link.href = `${link.getAttribute('href')}?tenant_id=${encodeURIComponent(tenantId)}`;
+      });
+      $('refresh').onclick = () => {
+        if (confirm('서버에 저장하지 않은 변경 내용은 새로고침하면 사라질 수 있습니다. 새로고침할까요?')) location.reload();
+      };
+      $('logout').onclick = CoaAuth.logout;
       buildCategoryOptions();
       clearCanvas();
       const seedRaw = localStorage.getItem(SEED_KEY);

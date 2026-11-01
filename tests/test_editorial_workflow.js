@@ -19,6 +19,13 @@ assert.match(page, /등록용 승인/);
 assert.match(page, /approved_for_registration/);
 assert.match(page, /CoaAuth\.request/);
 assert.match(page, /CoaAuth\.requireSession/);
+for (const [label, href] of [['수집 운영', '/vps-collector'], ['리서치 브리프', '/research-briefs'], ['기사 초안', '/coanews-draft']]) {
+  assert.match(page, new RegExp(`<a[^>]*href="${href}"[^>]*>${label}<\\/a>`));
+}
+assert.match(page, /id="refresh"[^>]*>새로고침<\/button>/);
+assert.match(page, /id="logout"[^>]*>로그아웃<\/button>/);
+assert.match(page, /\$\('logout'\)\.onclick = CoaAuth\.logout/);
+assert.match(page, /\$\('refresh'\)\.onclick/);
 assert.doesNotMatch(page, /CRON_SECRET/);
 assert.match(schema, /approved_for_registration/);
 assert.match(schema, /coanews-draft\/2\.0/);
